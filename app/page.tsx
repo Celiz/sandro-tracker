@@ -11,6 +11,14 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DollarSign,
   TrendingDown,
   TrendingUp,
@@ -21,6 +29,7 @@ import {
   Target,
   PieChart,
   User,
+  Trash2,
 } from "lucide-react"
 import {
   format,
@@ -66,6 +75,13 @@ export default function RideShareTracker() {
   const [selectedConductor, setSelectedConductor] = useState("all")
   const [statsPeriod, setStatsPeriod] = useState<"day" | "week" | "month">("week")
   const [statsSelectedConductor, setStatsSelectedConductor] = useState("all")
+
+  // Dialog states for confirmation
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    type: "" as "earning" | "expense",
+    item: null as any,
+  })
 
   // Form states
   const [earningForm, setEarningForm] = useState({
@@ -195,6 +211,59 @@ export default function RideShareTracker() {
     } else {
       toast.error("Por favor completa todos los campos obligatorios")
     }
+  }
+
+  const deleteExpense = async (expenseId: string, expenseAmount: number, expenseCategory: string) => {
+    setDeleteDialog({
+      open: true,
+      type: "expense",
+      item: { id: expenseId, amount: expenseAmount, category: expenseCategory }
+    })
+  }
+
+  const deleteEarning = async (earningId: string, earningAmount: number, earningPlatform: string, earningConductor: string) => {
+    setDeleteDialog({
+      open: true,
+      type: "earning",
+      item: { id: earningId, amount: earningAmount, platform: earningPlatform, conductor: earningConductor }
+    })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.item) return
+
+    try {
+      if (deleteDialog.type === "expense") {
+        const { error } = await supabase
+          .from("expenses")
+          .delete()
+          .eq("id", deleteDialog.item.id)
+
+        if (error) throw error
+
+        setExpenses(expenses.filter(expense => expense.id !== deleteDialog.item.id))
+        toast.success("Gasto eliminado correctamente")
+      } else if (deleteDialog.type === "earning") {
+        const { error } = await supabase
+          .from("earnings")
+          .delete()
+          .eq("id", deleteDialog.item.id)
+
+        if (error) throw error
+
+        setEarnings(earnings.filter(earning => earning.id !== deleteDialog.item.id))
+        toast.success("Ganancia eliminada correctamente")
+      }
+    } catch (error) {
+      console.error("Error deleting item:", error)
+      toast.error(`Error al eliminar ${deleteDialog.type === "expense" ? "el gasto" : "la ganancia"}`)
+    } finally {
+      setDeleteDialog({ open: false, type: "" as any, item: null })
+    }
+  }
+
+  const cancelDelete = () => {
+    setDeleteDialog({ open: false, type: "" as any, item: null })
   }
 
   // Filter data based on selected date, platform, and conductor
@@ -875,8 +944,18 @@ export default function RideShareTracker() {
                               <p className="text-xs text-gray-600 mt-1 truncate">{earning.description}</p>
                             )}
                           </div>
-                          <div className="text-sm sm:text-lg font-semibold text-green-600 ml-2">
-                            +${earning.amount.toFixed(2)}
+                          <div className="flex items-center gap-2 ml-2">
+                            <div className="text-sm sm:text-lg font-semibold text-green-600">
+                              +${earning.amount.toFixed(2)}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteEarning(earning.id, earning.amount, earning.platform, earning.conductor)}
+                              className="h-8 w-8 p-0 hover:bg-red-100 text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -912,8 +991,18 @@ export default function RideShareTracker() {
                               <p className="text-xs text-gray-600 mt-1 truncate">{expense.description}</p>
                             )}
                           </div>
-                          <div className="text-sm sm:text-lg font-semibold text-red-600 ml-2">
-                            -${expense.amount.toFixed(2)}
+                          <div className="flex items-center gap-2 ml-2">
+                            <div className="text-sm sm:text-lg font-semibold text-red-600">
+                              -${expense.amount.toFixed(2)}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteExpense(expense.id, expense.amount, expense.category)}
+                              className="h-8 w-8 p-0 hover:bg-red-100 text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -1431,6 +1520,78 @@ export default function RideShareTracker() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialog.open} onOpenChange={(open) => !open && cancelDelete()}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">
+              Confirmar Eliminación
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              ¿Estás seguro que deseas borrar {deleteDialog.type === "expense" ? "este gasto" : "esta ganancia"}?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {deleteDialog.item && (
+            <div className="py-4">
+              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                {deleteDialog.type === "expense" ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm">Categoría:</span>
+                      <span className="text-sm">{deleteDialog.item.category}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm">Monto:</span>
+                      <span className="text-sm font-semibold text-red-600">
+                        ${deleteDialog.item.amount.toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm">Plataforma:</span>
+                      <span className="text-sm">{deleteDialog.item.platform}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm">Conductor:</span>
+                      <span className="text-sm">{deleteDialog.item.conductor}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-sm">Monto:</span>
+                      <span className="text-sm font-semibold text-green-600">
+                        ${deleteDialog.item.amount.toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mt-3 text-center">
+                Esta acción no se puede deshacer.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={cancelDelete}
+              className="text-gray-600 hover:text-gray-700"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
