@@ -485,7 +485,7 @@ export default function RideShareTracker() {
                         <SelectItem value={format(new Date(), "yyyy-MM-dd")}>Hoy</SelectItem>
                         <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")}>Ayer</SelectItem>
                         {availableDates.length > 0 && (
-                          <SelectItem value="" disabled>
+                          <SelectItem value="separator" disabled>
                             --- Fechas con datos ---
                           </SelectItem>
                         )}
