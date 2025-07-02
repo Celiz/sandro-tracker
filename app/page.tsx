@@ -53,7 +53,7 @@ import {
 
 const platforms = ["Uber", "Cabify", "Didi"]
 const conductors = ["Mamá (Claudia)", "Facundo"]
-const expenseCategories = ["Fuel", "Toll", "Parking", "Car Wash", "Maintenance", "Other"]
+const expenseCategories = ["Nafta","Lavar el auto", "Repuesto", "Other"]
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"]
 
@@ -65,6 +65,7 @@ export default function RideShareTracker() {
   const [selectedPlatform, setSelectedPlatform] = useState("all")
   const [selectedConductor, setSelectedConductor] = useState("all")
   const [statsPeriod, setStatsPeriod] = useState<"day" | "week" | "month">("week")
+  const [statsSelectedConductor, setStatsSelectedConductor] = useState("all")
 
   // Form states
   const [earningForm, setEarningForm] = useState({
@@ -213,7 +214,7 @@ export default function RideShareTracker() {
   const totalSpent = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)
   const netIncome = totalEarned - totalSpent
 
-  // Statistics calculations based on period
+  // Statistics calculations based on period - use ALL data, not filtered
   const getStatsData = () => {
     if (earnings.length === 0 && expenses.length === 0) {
       return []
@@ -236,19 +237,16 @@ export default function RideShareTracker() {
 
     switch (statsPeriod) {
       case "day":
-        // Show all days from earliest data to today
         startDate = earliestDate
         endDate = latestDate > today ? latestDate : today
         intervals = eachDayOfInterval({ start: startDate, end: endDate })
         break
       case "week":
-        // Show all weeks from earliest data
         startDate = startOfWeek(earliestDate, { weekStartsOn: 1 })
         endDate = endOfWeek(latestDate > today ? latestDate : today, { weekStartsOn: 1 })
         intervals = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 })
         break
       case "month":
-        // Show all months from earliest data
         startDate = startOfMonth(earliestDate)
         endDate = endOfMonth(latestDate > today ? latestDate : today)
         intervals = eachMonthOfInterval({ start: startDate, end: endDate })
@@ -285,12 +283,10 @@ export default function RideShareTracker() {
         // Filter earnings for this period using string comparison for dates
         const periodEarnings = earnings.filter((e) => {
           if (statsPeriod === "day") {
-            // For daily comparison, compare date strings directly
-            const earningDate = e.date // This is already in YYYY-MM-DD format from database
+            const earningDate = e.date
             const periodDate = format(date, "yyyy-MM-dd")
             return earningDate === periodDate
           } else {
-            // For week/month, use date range comparison
             const eDate = new Date(e.date)
             return eDate >= periodStart && eDate <= periodEnd
           }
@@ -299,12 +295,10 @@ export default function RideShareTracker() {
         // Filter expenses for this period using string comparison for dates
         const periodExpenses = expenses.filter((e) => {
           if (statsPeriod === "day") {
-            // For daily comparison, compare date strings directly
-            const expenseDate = e.date // This is already in YYYY-MM-DD format from database
+            const expenseDate = e.date
             const periodDate = format(date, "yyyy-MM-dd")
             return expenseDate === periodDate
           } else {
-            // For week/month, use date range comparison
             const eDate = new Date(e.date)
             return eDate >= periodStart && eDate <= periodEnd
           }
@@ -336,13 +330,13 @@ export default function RideShareTracker() {
           hasData: totalEarnings > 0 || totalExpenses > 0,
         }
       })
-      .filter((item) => item.hasData || statsPeriod === "day") // For days, show all days, for weeks/months only show periods with data
+      .filter((item) => item.hasData || statsPeriod === "day")
   }
 
-  // Platform statistics
+  // Platform statistics - use ALL earnings, not filtered
   const platformStats = platforms
     .map((platform) => {
-      const platformEarnings = filteredEarnings.filter((e) => e.platform === platform)
+      const platformEarnings = earnings.filter((e) => e.platform === platform)
       const total = platformEarnings.reduce((sum, e) => sum + e.amount, 0)
       const trips = platformEarnings.length
       return {
@@ -354,10 +348,10 @@ export default function RideShareTracker() {
     })
     .filter((stat) => stat.value > 0)
 
-  // Conductor statistics
+  // Conductor statistics - use ALL earnings, not filtered
   const conductorStats = conductors
     .map((conductor) => {
-      const conductorEarnings = filteredEarnings.filter((e) => e.conductor === conductor)
+      const conductorEarnings = earnings.filter((e) => e.conductor === conductor)
       const total = conductorEarnings.reduce((sum, e) => sum + e.amount, 0)
       const trips = conductorEarnings.length
       return {
@@ -369,21 +363,149 @@ export default function RideShareTracker() {
     })
     .filter((stat) => stat.value > 0)
 
-  // Expense category statistics
+  // Expense category statistics - use ALL expenses, not filtered
   const categoryStats = expenseCategories
     .map((category) => {
-      const categoryExpenses = filteredExpenses.filter((e) => e.category === category)
+      const categoryExpenses = expenses.filter((e) => e.category === category)
       const total = categoryExpenses.reduce((sum, e) => sum + e.amount, 0)
+      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
       return {
         name: category,
         value: total,
-        percentage:
-          filteredExpenses.length > 0 ? (total / filteredExpenses.reduce((sum, e) => sum + e.amount, 0)) * 100 : 0,
+        percentage: totalExpenses > 0 ? (total / totalExpenses) * 100 : 0,
       }
     })
     .filter((stat) => stat.value > 0)
 
   const chartData = getStatsData()
+
+  // Get conductor-specific data
+  const getConductorStatsData = () => {
+    if (earnings.length === 0 && expenses.length === 0) {
+      return []
+    }
+
+    // Filter by conductor if not "all"
+    const conductorEarnings =
+      statsSelectedConductor === "all" ? earnings : earnings.filter((e) => e.conductor === statsSelectedConductor)
+
+    // Get all dates from filtered earnings and all expenses
+    const allDates = [...conductorEarnings.map((e) => e.date), ...expenses.map((e) => e.date)]
+      .map((dateStr) => new Date(dateStr))
+      .sort((a, b) => a.getTime() - b.getTime())
+
+    if (allDates.length === 0) return []
+
+    const earliestDate = allDates[0]
+    const latestDate = allDates[allDates.length - 1]
+    const today = new Date()
+
+    let startDate: Date
+    let endDate: Date
+    let intervals: Date[]
+
+    switch (statsPeriod) {
+      case "day":
+        startDate = earliestDate
+        endDate = latestDate > today ? latestDate : today
+        intervals = eachDayOfInterval({ start: startDate, end: endDate })
+        break
+      case "week":
+        startDate = startOfWeek(earliestDate, { weekStartsOn: 1 })
+        endDate = endOfWeek(latestDate > today ? latestDate : today, { weekStartsOn: 1 })
+        intervals = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 })
+        break
+      case "month":
+        startDate = startOfMonth(earliestDate)
+        endDate = endOfMonth(latestDate > today ? latestDate : today)
+        intervals = eachMonthOfInterval({ start: startDate, end: endDate })
+        break
+      default:
+        startDate = earliestDate
+        endDate = latestDate > today ? latestDate : today
+        intervals = eachDayOfInterval({ start: startDate, end: endDate })
+    }
+
+    return intervals
+      .map((date) => {
+        let periodStart: Date
+        let periodEnd: Date
+
+        switch (statsPeriod) {
+          case "day":
+            periodStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+            periodEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59)
+            break
+          case "week":
+            periodStart = startOfWeek(date, { weekStartsOn: 1 })
+            periodEnd = endOfWeek(date, { weekStartsOn: 1 })
+            break
+          case "month":
+            periodStart = startOfMonth(date)
+            periodEnd = endOfMonth(date)
+            break
+          default:
+            periodStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+            periodEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59)
+        }
+
+        // Filter earnings for this period and conductor
+        const periodEarnings = conductorEarnings.filter((e) => {
+          if (statsPeriod === "day") {
+            const earningDate = e.date
+            const periodDate = format(date, "yyyy-MM-dd")
+            return earningDate === periodDate
+          } else {
+            const eDate = new Date(e.date)
+            return eDate >= periodStart && eDate <= periodEnd
+          }
+        })
+
+        // Filter expenses for this period (all expenses, not by conductor)
+        const periodExpenses = expenses.filter((e) => {
+          if (statsPeriod === "day") {
+            const expenseDate = e.date
+            const periodDate = format(date, "yyyy-MM-dd")
+            return expenseDate === periodDate
+          } else {
+            const eDate = new Date(e.date)
+            return eDate >= periodStart && eDate <= periodEnd
+          }
+        })
+
+        const totalEarnings = periodEarnings.reduce((sum, e) => sum + e.amount, 0)
+        const totalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0)
+        const trips = periodEarnings.length
+
+        let label: string
+        switch (statsPeriod) {
+          case "day":
+            label = format(date, "dd/MM", { locale: es })
+            break
+          case "week":
+            label = `S${format(date, "w", { locale: es })}`
+            break
+          case "month":
+            label = format(date, "MMM", { locale: es })
+            break
+          default:
+            label = format(date, "dd/MM", { locale: es })
+        }
+
+        return {
+          period: label,
+          ganancias: totalEarnings,
+          gastos: totalExpenses,
+          neto: totalEarnings - totalExpenses,
+          viajes: trips,
+          promedioPorViaje: trips > 0 ? totalEarnings / trips : 0,
+          hasData: totalEarnings > 0 || totalExpenses > 0,
+        }
+      })
+      .filter((item) => item.hasData || statsPeriod === "day")
+  }
+
+  const conductorChartData = getConductorStatsData()
 
   // Get available dates for the filter
   const getAvailableDates = () => {
@@ -806,25 +928,46 @@ export default function RideShareTracker() {
           </TabsContent>
 
           <TabsContent value="statistics" className="space-y-4 sm:space-y-6">
-            {/* Period Selector */}
+            {/* Period and Conductor Selector */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                   <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Período de Análisis
+                  Configuración de Análisis
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Select value={statsPeriod} onValueChange={(value: "day" | "week" | "month") => setStatsPeriod(value)}>
-                  <SelectTrigger className="w-full sm:w-[200px] text-xs sm:text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="day">Por Día (todos los días con datos)</SelectItem>
-                    <SelectItem value="week">Por Semana (todas las semanas con datos)</SelectItem>
-                    <SelectItem value="month">Por Mes (todos los meses con datos)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Período de Análisis</Label>
+                    <Select value={statsPeriod} onValueChange={(value: "day" | "week" | "month") => setStatsPeriod(value)}>
+                      <SelectTrigger className="text-xs sm:text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="day">Por Día</SelectItem>
+                        <SelectItem value="week">Por Semana</SelectItem>
+                        <SelectItem value="month">Por Mes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm">Conductor para Análisis Detallado</Label>
+                    <Select value={statsSelectedConductor} onValueChange={setStatsSelectedConductor}>
+                      <SelectTrigger className="text-xs sm:text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los conductores</SelectItem>
+                        {conductors.map((conductor) => (
+                          <SelectItem key={conductor} value={conductor}>
+                            {conductor}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -839,21 +982,27 @@ export default function RideShareTracker() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[250px] sm:h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
-                        <YAxis fontSize={12} tick={{ fontSize: 10 }} />
-                        <Tooltip
-                          contentStyle={{ fontSize: "12px" }}
-                          formatter={(value: number) => [`$${value.toFixed(2)}`, ""]}
-                        />
-                        <Bar dataKey="ganancias" fill="#10B981" name="Ganancias" />
-                        <Bar dataKey="gastos" fill="#EF4444" name="Gastos" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  {chartData.length > 0 ? (
+                    <div className="h-[250px] sm:h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
+                          <YAxis fontSize={12} tick={{ fontSize: 10 }} />
+                          <Tooltip
+                            contentStyle={{ fontSize: "12px" }}
+                            formatter={(value: number) => [`$${value.toFixed(2)}`, ""]}
+                          />
+                          <Bar dataKey="ganancias" fill="#10B981" name="Ganancias" />
+                          <Bar dataKey="gastos" fill="#EF4444" name="Gastos" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
+                      <p className="text-gray-500 text-sm">No hay datos para mostrar</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -866,23 +1015,176 @@ export default function RideShareTracker() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[250px] sm:h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
-                        <YAxis fontSize={12} tick={{ fontSize: 10 }} />
-                        <Tooltip
-                          contentStyle={{ fontSize: "12px" }}
-                          formatter={(value: number) => [`$${value.toFixed(2)}`, "Neto"]}
-                        />
-                        <Area type="monotone" dataKey="neto" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
+                  {chartData.length > 0 ? (
+                    <div className="h-[250px] sm:h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
+                          <YAxis fontSize={12} tick={{ fontSize: 10 }} />
+                          <Tooltip
+                            contentStyle={{ fontSize: "12px" }}
+                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Neto"]}
+                          />
+                          <Area type="monotone" dataKey="neto" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
+                      <p className="text-gray-500 text-sm">No hay datos para mostrar</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
+
+            {/* Conductor-Specific Analysis */}
+            {statsSelectedConductor !== "all" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <User className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Análisis Detallado: {statsSelectedConductor}
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    Estadísticas específicas del conductor seleccionado por {statsPeriod === "day" ? "día" : statsPeriod === "week" ? "semana" : "mes"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {conductorChartData.length > 0 ? (
+                    <div className="space-y-6">
+                      {/* Summary Cards for Selected Conductor */}
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
+                        <Card className="bg-green-50">
+                          <CardContent className="p-3 sm:p-4">
+                            <div className="text-center">
+                              <div className="text-lg sm:text-xl font-bold text-green-600">
+                                ${conductorChartData.reduce((sum, item) => sum + item.ganancias, 0).toFixed(2)}
+                              </div>
+                              <div className="text-xs sm:text-sm text-gray-600">Total Ganado</div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-blue-50">
+                          <CardContent className="p-3 sm:p-4">
+                            <div className="text-center">
+                              <div className="text-lg sm:text-xl font-bold text-blue-600">
+                                {conductorChartData.reduce((sum, item) => sum + item.viajes, 0)}
+                              </div>
+                              <div className="text-xs sm:text-sm text-gray-600">Total Viajes</div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-purple-50">
+                          <CardContent className="p-3 sm:p-4">
+                            <div className="text-center">
+                              <div className="text-lg sm:text-xl font-bold text-purple-600">
+                                ${(conductorChartData.reduce((sum, item) => sum + item.ganancias, 0) / Math.max(conductorChartData.reduce((sum, item) => sum + item.viajes, 0), 1)).toFixed(2)}
+                              </div>
+                              <div className="text-xs sm:text-sm text-gray-600">Promedio/Viaje</div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="bg-orange-50">
+                          <CardContent className="p-3 sm:p-4">
+                            <div className="text-center">
+                              <div className="text-lg sm:text-xl font-bold text-orange-600">
+                                ${(conductorChartData.reduce((sum, item) => sum + item.neto, 0)).toFixed(2)}
+                              </div>
+                              <div className="text-xs sm:text-sm text-gray-600">Ganancia Neta</div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* Conductor Performance Chart */}
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-sm sm:text-base">Ganancias por Período</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[250px] sm:h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={conductorChartData}>
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
+                                  <YAxis fontSize={12} tick={{ fontSize: 10 }} />
+                                  <Tooltip
+                                    contentStyle={{ fontSize: "12px" }}
+                                    formatter={(value: number) => [`$${value.toFixed(2)}`, ""]}
+                                  />
+                                  <Bar dataKey="ganancias" fill="#10B981" name="Ganancias" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-sm sm:text-base">Viajes por Período</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="h-[250px] sm:h-[300px]">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={conductorChartData}>
+                                  <CartesianGrid strokeDasharray="3 3" />
+                                  <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
+                                  <YAxis fontSize={12} tick={{ fontSize: 10 }} />
+                                  <Tooltip
+                                    contentStyle={{ fontSize: "12px" }}
+                                    formatter={(value: number) => [value, "Viajes"]}
+                                  />
+                                  <Bar dataKey="viajes" fill="#3B82F6" name="Viajes" />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* Detailed Performance Table */}
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm sm:text-base">Detalle por Período</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-[300px]">
+                            <div className="space-y-2">
+                              {conductorChartData.map((item, index) => (
+                                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm">{item.period}</div>
+                                    <div className="text-xs text-gray-600">{item.viajes} viajes</div>
+                                  </div>
+                                  <div className="text-right space-y-1">
+                                    <div className="font-semibold text-green-600">${item.ganancias.toFixed(2)}</div>
+                                    <div className="text-xs text-gray-600">
+                                      Prom: ${item.promedioPorViaje.toFixed(2)}/viaje
+                                    </div>
+                                    <div className={`text-xs font-medium ${item.neto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                      Neto: ${item.neto.toFixed(2)}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500 text-sm">
+                        No hay datos disponibles para {statsSelectedConductor} en el período seleccionado
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Platform and Category Charts */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
@@ -906,8 +1208,7 @@ export default function RideShareTracker() {
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            labelStyle={{ fontSize: "10px" }}
+                            label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                           >
                             {platformStats.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -948,8 +1249,7 @@ export default function RideShareTracker() {
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
-                            label={({ name, percent }) => `${name.split(" ")[0]} ${(percent * 100).toFixed(0)}%`}
-                            labelStyle={{ fontSize: "10px" }}
+                            label={({ name, percent }) => `${name.split(" ")[0]} ${((percent ?? 0) * 100).toFixed(0)}%`}
                           >
                             {conductorStats.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
@@ -990,8 +1290,7 @@ export default function RideShareTracker() {
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                            labelStyle={{ fontSize: "10px" }}
+                            label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                           >
                             {categoryStats.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
