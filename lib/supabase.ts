@@ -10,6 +10,7 @@ export type Earning = {
   date: string
   platform: string
   amount: number
+  conductor: string
   description?: string
   created_at?: string
 }

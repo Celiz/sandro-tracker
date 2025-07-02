@@ -10,7 +10,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { DollarSign, TrendingDown, TrendingUp, Plus, Filter, BarChart3, Calendar, Target, PieChart } from "lucide-react"
+import {
+  DollarSign,
+  TrendingDown,
+  TrendingUp,
+  Plus,
+  Filter,
+  BarChart3,
+  Calendar,
+  Target,
+  PieChart,
+  User,
+} from "lucide-react"
 import {
   format,
   startOfWeek,
@@ -40,7 +51,8 @@ import {
   AreaChart,
 } from "recharts"
 
-const platforms = ["Uber", "Didi", "Lyft", "Bolt", "Other"]
+const platforms = ["Uber", "Cabify", "Didi"]
+const conductors = ["Mamá (Claudia)", "Facundo"]
 const expenseCategories = ["Fuel", "Toll", "Parking", "Car Wash", "Maintenance", "Other"]
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"]
@@ -49,14 +61,16 @@ export default function RideShareTracker() {
   const [earnings, setEarnings] = useState<Earning[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"))
+  const [selectedDate, setSelectedDate] = useState("all")
   const [selectedPlatform, setSelectedPlatform] = useState("all")
+  const [selectedConductor, setSelectedConductor] = useState("all")
   const [statsPeriod, setStatsPeriod] = useState<"day" | "week" | "month">("week")
 
   // Form states
   const [earningForm, setEarningForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     platform: "",
+    conductor: "",
     amount: "",
     description: "",
   })
@@ -113,7 +127,7 @@ export default function RideShareTracker() {
   }, [])
 
   const addEarning = async () => {
-    if (earningForm.platform && earningForm.amount) {
+    if (earningForm.platform && earningForm.conductor && earningForm.amount) {
       try {
         const { data, error } = await supabase
           .from("earnings")
@@ -121,6 +135,7 @@ export default function RideShareTracker() {
             {
               date: earningForm.date,
               platform: earningForm.platform,
+              conductor: earningForm.conductor,
               amount: Number.parseFloat(earningForm.amount),
               description: earningForm.description || null,
             },
@@ -133,6 +148,7 @@ export default function RideShareTracker() {
         setEarningForm({
           date: format(new Date(), "yyyy-MM-dd"),
           platform: "",
+          conductor: "",
           amount: "",
           description: "",
         })
@@ -141,6 +157,8 @@ export default function RideShareTracker() {
         console.error("Error adding earning:", error)
         toast.error("Error al registrar la ganancia")
       }
+    } else {
+      toast.error("Por favor completa todos los campos obligatorios")
     }
   }
 
@@ -173,14 +191,17 @@ export default function RideShareTracker() {
         console.error("Error adding expense:", error)
         toast.error("Error al registrar el gasto")
       }
+    } else {
+      toast.error("Por favor completa todos los campos obligatorios")
     }
   }
 
-  // Filter data based on selected date and platform
+  // Filter data based on selected date, platform, and conductor
   const filteredEarnings = earnings.filter((earning) => {
     const dateMatch = selectedDate === "all" || earning.date === selectedDate
     const platformMatch = selectedPlatform === "all" || earning.platform === selectedPlatform
-    return dateMatch && platformMatch
+    const conductorMatch = selectedConductor === "all" || earning.conductor === selectedConductor
+    return dateMatch && platformMatch && conductorMatch
   })
 
   const filteredExpenses = expenses.filter((expense) => {
@@ -321,7 +342,7 @@ export default function RideShareTracker() {
   // Platform statistics
   const platformStats = platforms
     .map((platform) => {
-      const platformEarnings = earnings.filter((e) => e.platform === platform)
+      const platformEarnings = filteredEarnings.filter((e) => e.platform === platform)
       const total = platformEarnings.reduce((sum, e) => sum + e.amount, 0)
       const trips = platformEarnings.length
       return {
@@ -333,20 +354,45 @@ export default function RideShareTracker() {
     })
     .filter((stat) => stat.value > 0)
 
+  // Conductor statistics
+  const conductorStats = conductors
+    .map((conductor) => {
+      const conductorEarnings = filteredEarnings.filter((e) => e.conductor === conductor)
+      const total = conductorEarnings.reduce((sum, e) => sum + e.amount, 0)
+      const trips = conductorEarnings.length
+      return {
+        name: conductor,
+        value: total,
+        trips,
+        average: trips > 0 ? total / trips : 0,
+      }
+    })
+    .filter((stat) => stat.value > 0)
+
   // Expense category statistics
   const categoryStats = expenseCategories
     .map((category) => {
-      const categoryExpenses = expenses.filter((e) => e.category === category)
+      const categoryExpenses = filteredExpenses.filter((e) => e.category === category)
       const total = categoryExpenses.reduce((sum, e) => sum + e.amount, 0)
       return {
         name: category,
         value: total,
-        percentage: expenses.length > 0 ? (total / expenses.reduce((sum, e) => sum + e.amount, 0)) * 100 : 0,
+        percentage:
+          filteredExpenses.length > 0 ? (total / filteredExpenses.reduce((sum, e) => sum + e.amount, 0)) * 100 : 0,
       }
     })
     .filter((stat) => stat.value > 0)
 
   const chartData = getStatsData()
+
+  // Get available dates for the filter
+  const getAvailableDates = () => {
+    const allDates = [...earnings.map((e) => e.date), ...expenses.map((e) => e.date)]
+    const uniqueDates = [...new Set(allDates)].sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+    return uniqueDates
+  }
+
+  const availableDates = getAvailableDates()
 
   if (loading) {
     return (
@@ -365,7 +411,7 @@ export default function RideShareTracker() {
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard del Conductor</h1>
-          <p className="text-sm sm:text-base text-gray-600">Rastrea tus ganancias y gastos diarios</p>
+          <p className="text-sm sm:text-base text-gray-600">Rastrea las ganancias y gastos de Mamá y Facundo</p>
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full">
@@ -425,7 +471,7 @@ export default function RideShareTracker() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="date-filter" className="text-xs sm:text-sm">
                       Fecha
@@ -438,6 +484,18 @@ export default function RideShareTracker() {
                         <SelectItem value="all">Todas las fechas</SelectItem>
                         <SelectItem value={format(new Date(), "yyyy-MM-dd")}>Hoy</SelectItem>
                         <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")}>Ayer</SelectItem>
+                        {availableDates.length > 0 && (
+                          <SelectItem value="" disabled>
+                            --- Fechas con datos ---
+                          </SelectItem>
+                        )}
+                        {availableDates.map((date) => (
+                          <SelectItem key={date} value={date}>
+                            {format(new Date(date), "dd/MM/yyyy", { locale: es })}
+                            {date === format(new Date(), "yyyy-MM-dd") ? " (Hoy)" : ""}
+                            {date === format(subDays(new Date(), 1), "yyyy-MM-dd") ? " (Ayer)" : ""}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -460,6 +518,25 @@ export default function RideShareTracker() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="conductor-filter" className="text-xs sm:text-sm">
+                      Conductor
+                    </Label>
+                    <Select value={selectedConductor} onValueChange={setSelectedConductor}>
+                      <SelectTrigger className="text-xs sm:text-sm">
+                        <SelectValue placeholder="Seleccionar conductor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los conductores</SelectItem>
+                        {conductors.map((conductor) => (
+                          <SelectItem key={conductor} value={conductor}>
+                            {conductor}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -472,7 +549,7 @@ export default function RideShareTracker() {
                     <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                     Agregar Ganancias
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">Registra las ganancias de tus viajes</CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">Registra las ganancias de los viajes</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 sm:space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -491,7 +568,7 @@ export default function RideShareTracker() {
 
                     <div className="space-y-2">
                       <Label htmlFor="earning-platform" className="text-xs sm:text-sm">
-                        Plataforma
+                        Plataforma *
                       </Label>
                       <Select
                         value={earningForm.platform}
@@ -511,19 +588,42 @@ export default function RideShareTracker() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="earning-amount" className="text-xs sm:text-sm">
-                      Cantidad Ganada ($)
-                    </Label>
-                    <Input
-                      id="earning-amount"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={earningForm.amount}
-                      onChange={(e) => setEarningForm({ ...earningForm, amount: e.target.value })}
-                      className="text-xs sm:text-sm"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="earning-conductor" className="text-xs sm:text-sm">
+                        Conductor *
+                      </Label>
+                      <Select
+                        value={earningForm.conductor}
+                        onValueChange={(value) => setEarningForm({ ...earningForm, conductor: value })}
+                      >
+                        <SelectTrigger className="text-xs sm:text-sm">
+                          <SelectValue placeholder="Seleccionar conductor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {conductors.map((conductor) => (
+                            <SelectItem key={conductor} value={conductor}>
+                              {conductor}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="earning-amount" className="text-xs sm:text-sm">
+                        Cantidad Ganada ($) *
+                      </Label>
+                      <Input
+                        id="earning-amount"
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={earningForm.amount}
+                        onChange={(e) => setEarningForm({ ...earningForm, amount: e.target.value })}
+                        className="text-xs sm:text-sm"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -552,7 +652,7 @@ export default function RideShareTracker() {
                     <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                     Agregar Gastos
                   </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">Registra tus gastos de conducción</CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">Registra los gastos de conducción</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 sm:space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -571,7 +671,7 @@ export default function RideShareTracker() {
 
                     <div className="space-y-2">
                       <Label htmlFor="expense-category" className="text-xs sm:text-sm">
-                        Categoría
+                        Categoría *
                       </Label>
                       <Select
                         value={expenseForm.category}
@@ -593,7 +693,7 @@ export default function RideShareTracker() {
 
                   <div className="space-y-2">
                     <Label htmlFor="expense-amount" className="text-xs sm:text-sm">
-                      Cantidad ($)
+                      Cantidad ($) *
                     </Label>
                     <Input
                       id="expense-amount"
@@ -643,6 +743,9 @@ export default function RideShareTracker() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge variant="secondary" className="text-xs">
                                 {earning.platform}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {earning.conductor}
                               </Badge>
                               <span className="text-xs text-gray-600">{earning.date}</span>
                             </div>
@@ -782,13 +885,13 @@ export default function RideShareTracker() {
             </div>
 
             {/* Platform and Category Charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
               {/* Platform Distribution */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                     <PieChart className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Distribución por Plataforma
+                    Por Plataforma
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -825,6 +928,48 @@ export default function RideShareTracker() {
                 </CardContent>
               </Card>
 
+              {/* Conductor Distribution */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <User className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Por Conductor
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {conductorStats.length > 0 ? (
+                    <div className="h-[250px] sm:h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsPieChart>
+                          <Pie
+                            data={conductorStats}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                            label={({ name, percent }) => `${name.split(" ")[0]} ${(percent * 100).toFixed(0)}%`}
+                            labelStyle={{ fontSize: "10px" }}
+                          >
+                            {conductorStats.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ fontSize: "12px" }}
+                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Total"]}
+                          />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="text-center text-gray-500 py-8 text-xs sm:text-sm">
+                      No hay datos de conductores disponibles
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Expense Categories */}
               <Card>
                 <CardHeader>
@@ -849,7 +994,7 @@ export default function RideShareTracker() {
                             labelStyle={{ fontSize: "10px" }}
                           >
                             {categoryStats.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
                             ))}
                           </Pie>
                           <Tooltip
@@ -869,7 +1014,7 @@ export default function RideShareTracker() {
             </div>
 
             {/* Detailed Statistics */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Platform Details */}
               <Card>
                 <CardHeader>
@@ -895,7 +1040,7 @@ export default function RideShareTracker() {
                             <div
                               className="bg-blue-600 h-2 rounded-full"
                               style={{
-                                width: `${(stat.value / Math.max(...platformStats.map((s) => s.value))) * 100}%`,
+                                width: `${platformStats.length > 0 ? (stat.value / Math.max(...platformStats.map((s) => s.value))) * 100 : 0}%`,
                               }}
                             ></div>
                           </div>
@@ -904,6 +1049,47 @@ export default function RideShareTracker() {
                       {platformStats.length === 0 && (
                         <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
                           No hay datos de plataformas disponibles
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* Conductor Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm sm:text-base">Detalles por Conductor</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[200px] sm:h-[250px]">
+                    <div className="space-y-3 sm:space-y-4">
+                      {conductorStats.map((stat) => (
+                        <div key={stat.name} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-xs sm:text-sm">{stat.name}</span>
+                            <div className="text-right">
+                              <div className="font-semibold text-xs sm:text-sm">${stat.value.toFixed(2)}</div>
+                              <div className="text-xs text-gray-600">{stat.trips} viajes</div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-xs text-gray-600">
+                            <span>Promedio por viaje</span>
+                            <span>${stat.average.toFixed(2)}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-600 h-2 rounded-full"
+                              style={{
+                                width: `${conductorStats.length > 0 ? (stat.value / Math.max(...conductorStats.map((s) => s.value))) * 100 : 0}%`,
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                      {conductorStats.length === 0 && (
+                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
+                          No hay datos de conductores disponibles
                         </p>
                       )}
                     </div>

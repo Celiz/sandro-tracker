@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS earnings (
   date DATE NOT NULL,
   platform VARCHAR(50) NOT NULL,
   amount DECIMAL(10,2) NOT NULL,
+  conductor VARCHAR(50) NOT NULL,
   description TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_earnings_date ON earnings(date);
 CREATE INDEX IF NOT EXISTS idx_earnings_platform ON earnings(platform);
+CREATE INDEX IF NOT EXISTS idx_earnings_conductor ON earnings(conductor);
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
 CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 
@@ -28,6 +30,9 @@ CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
 ALTER TABLE earnings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 
--- Create policies (allow all operations for now - you can restrict later)
-CREATE POLICY "Allow all operations on earnings" ON earnings FOR ALL USING (true);
-CREATE POLICY "Allow all operations on expenses" ON expenses FOR ALL USING (true);
+-- Create policies to allow all operations for authenticated users
+CREATE POLICY IF NOT EXISTS "Allow all operations for authenticated users" ON earnings
+  FOR ALL USING (true);
+
+CREATE POLICY IF NOT EXISTS "Allow all operations for authenticated users" ON expenses
+  FOR ALL USING (true);
