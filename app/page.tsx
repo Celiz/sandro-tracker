@@ -73,6 +73,7 @@ export default function RideShareTracker() {
   const [selectedDate, setSelectedDate] = useState("all")
   const [selectedPlatform, setSelectedPlatform] = useState("all")
   const [selectedConductor, setSelectedConductor] = useState("all")
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null)
   const [statsPeriod, setStatsPeriod] = useState<"day" | "week" | "month">("week")
   const [statsSelectedConductor, setStatsSelectedConductor] = useState("all")
 
@@ -275,7 +276,9 @@ export default function RideShareTracker() {
   })
 
   const filteredExpenses = expenses.filter((expense) => {
-    return selectedDate === "all" || expense.date === selectedDate
+    const dateMatch = selectedDate === "all" || expense.date === selectedDate
+    const categoryMatch = !selectedExpenseCategory || expense.category === selectedExpenseCategory
+    return dateMatch && categoryMatch
   })
 
   // Calculate daily summary
@@ -606,9 +609,12 @@ export default function RideShareTracker() {
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6">
+          <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6">
             <TabsTrigger value="dashboard" className="text-xs sm:text-sm">
               Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="gastos" className="text-xs sm:text-sm">
+              Gastos
             </TabsTrigger>
             <TabsTrigger value="statistics" className="text-xs sm:text-sm">
               Estadísticas
@@ -1008,6 +1014,368 @@ export default function RideShareTracker() {
                       ))}
                       {filteredExpenses.length === 0 && (
                         <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">No hay gastos registrados</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="gastos" className="space-y-4 sm:space-y-6">
+            {/* Resumen de Gastos */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs sm:text-sm font-medium">Total Gastos</CardTitle>
+                  <TrendingDown className="h-4 w-4 text-red-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl sm:text-2xl font-bold text-red-600">${totalSpent.toFixed(2)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {filteredExpenses.length} transacciones
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs sm:text-sm font-medium">Gasto Promedio</CardTitle>
+                  <DollarSign className="h-4 w-4 text-orange-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl sm:text-2xl font-bold text-orange-600">
+                    ${filteredExpenses.length > 0 ? (totalSpent / filteredExpenses.length).toFixed(2) : '0.00'}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Por transacción
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs sm:text-sm font-medium">Mayor Gasto</CardTitle>
+                  <Target className="h-4 w-4 text-purple-600" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xl sm:text-2xl font-bold text-purple-600">
+                    ${filteredExpenses.length > 0 ? Math.max(...filteredExpenses.map(e => e.amount)).toFixed(2) : '0.00'}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    En una sola transacción
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Filtros específicos para gastos */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                  <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
+                  Filtros de Gastos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-date-filter" className="text-xs sm:text-sm">
+                      Fecha
+                    </Label>
+                    <Select value={selectedDate} onValueChange={setSelectedDate}>
+                      <SelectTrigger className="text-xs sm:text-sm">
+                        <SelectValue placeholder="Seleccionar fecha" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las fechas</SelectItem>
+                        <SelectItem value={format(new Date(), "yyyy-MM-dd")}>Hoy</SelectItem>
+                        <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")}>Ayer</SelectItem>
+                        {availableDates.length > 0 && (
+                          <SelectItem value="separator" disabled>
+                            --- Fechas con datos ---
+                          </SelectItem>
+                        )}
+                        {availableDates.map((date) => (
+                          <SelectItem key={date} value={date}>
+                            {format(new Date(date), "dd/MM/yyyy", { locale: es })}
+                            {date === format(new Date(), "yyyy-MM-dd") ? " (Hoy)" : ""}
+                            {date === format(subDays(new Date(), 1), "yyyy-MM-dd") ? " (Ayer)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-category-filter" className="text-xs sm:text-sm">
+                      Categoría
+                    </Label>
+                    <Select value={selectedExpenseCategory || "all"} onValueChange={(value) => setSelectedExpenseCategory(value === "all" ? null : value)}>
+                      <SelectTrigger className="text-xs sm:text-sm">
+                        <SelectValue placeholder="Seleccionar categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las categorías</SelectItem>
+                        {expenseCategories.map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Formulario de agregar gastos más prominente */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Agregar Nuevo Gasto
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Registra un nuevo gasto de conducción</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 sm:space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="expense-date" className="text-xs sm:text-sm">
+                        Fecha
+                      </Label>
+                      <Input
+                        id="expense-date"
+                        type="date"
+                        value={expenseForm.date}
+                        onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
+                        className="text-xs sm:text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="expense-category" className="text-xs sm:text-sm">
+                        Categoría *
+                      </Label>
+                      <Select
+                        value={expenseForm.category}
+                        onValueChange={(value) => setExpenseForm({ ...expenseForm, category: value })}
+                      >
+                        <SelectTrigger className="text-xs sm:text-sm">
+                          <SelectValue placeholder="Seleccionar categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {expenseCategories.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-amount" className="text-xs sm:text-sm">
+                      Cantidad ($) *
+                    </Label>
+                    <Input
+                      id="expense-amount"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={expenseForm.amount}
+                      onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                      className="text-xs sm:text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="expense-description" className="text-xs sm:text-sm">
+                      Descripción (Opcional)
+                    </Label>
+                    <Textarea
+                      id="expense-description"
+                      placeholder="ej. Gasolinera Shell, Peaje autopista, Cambio de aceite"
+                      value={expenseForm.description}
+                      onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                      className="text-xs sm:text-sm min-h-[60px] sm:min-h-[80px]"
+                    />
+                  </div>
+
+                  <Button onClick={addExpense} className="w-full text-xs sm:text-sm" size="lg">
+                    Agregar Gasto
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Gráfico de gastos por categoría */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <PieChart className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Distribución por Categoría
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {categoryStats.length > 0 ? (
+                    <div className="h-[250px] sm:h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsPieChart>
+                          <Pie
+                            data={categoryStats}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                            label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                          >
+                            {categoryStats.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ fontSize: "12px" }}
+                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Total"]}
+                          />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
+                      <p className="text-gray-500 text-sm">No hay gastos registrados</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Lista detallada de gastos */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm sm:text-base">Historial de Gastos</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  {filteredExpenses.length} gastos registrados
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[400px] sm:h-[500px]">
+                  <div className="space-y-3">
+                    {filteredExpenses.map((expense) => (
+                      <div key={expense.id} className="flex items-center justify-between p-4 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 flex-wrap mb-2">
+                            <Badge variant="outline" className="text-xs font-medium">
+                              {expense.category}
+                            </Badge>
+                            <span className="text-sm text-gray-600">{format(new Date(expense.date), "dd/MM/yyyy", { locale: es })}</span>
+                          </div>
+                          {expense.description && (
+                            <p className="text-sm text-gray-700 mb-1">{expense.description}</p>
+                          )}
+                          <div className="text-xs text-gray-500">
+                            Registrado: {expense.created_at ? format(new Date(expense.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : 'Fecha no disponible'}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 ml-4">
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-red-600">
+                              -${expense.amount.toFixed(2)}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteExpense(expense.id, expense.amount, expense.category)}
+                            className="h-8 w-8 p-0 hover:bg-red-200 text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredExpenses.length === 0 && (
+                      <div className="text-center py-8">
+                        <div className="text-gray-400 mb-4">
+                          <DollarSign className="h-12 w-12 mx-auto" />
+                        </div>
+                        <p className="text-gray-500 text-sm">No hay gastos registrados</p>
+                        <p className="text-gray-400 text-xs">Agrega tu primer gasto usando el formulario</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+
+            {/* Estadísticas adicionales */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Gastos por fecha */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Gastos por Período
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {chartData.length > 0 ? (
+                    <div className="h-[250px] sm:h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
+                          <YAxis fontSize={12} tick={{ fontSize: 10 }} />
+                          <Tooltip
+                            contentStyle={{ fontSize: "12px" }}
+                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Gastos"]}
+                          />
+                          <Bar dataKey="gastos" fill="#EF4444" name="Gastos" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
+                      <p className="text-gray-500 text-sm">No hay datos para mostrar</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Detalles por categoría */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm sm:text-base">Detalles por Categoría</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[250px] sm:h-[300px]">
+                    <div className="space-y-4">
+                      {categoryStats.map((stat, index) => (
+                        <div key={stat.name} className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium text-xs sm:text-sm">{stat.name}</span>
+                            <div className="text-right">
+                              <div className="font-semibold text-xs sm:text-sm">${stat.value.toFixed(2)}</div>
+                              <div className="text-xs text-gray-600">{stat.percentage.toFixed(1)}% del total</div>
+                            </div>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-red-500 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${stat.percentage}%` }}
+                            ></div>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {filteredExpenses.filter(e => e.category === stat.name).length} transacciones
+                          </div>
+                        </div>
+                      ))}
+                      {categoryStats.length === 0 && (
+                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
+                          No hay datos de gastos disponibles
+                        </p>
                       )}
                     </div>
                   </ScrollArea>
