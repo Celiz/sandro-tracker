@@ -978,7 +978,7 @@ export default function RideShareTracker() {
                 <CardContent>
                   <ScrollArea className="h-[300px] sm:h-[400px]">
                     <div className="space-y-3">
-                      {filteredExpenses.slice(0, 10).map((expense) => (
+                      {filteredExpenses.map((expense) => (
                         <div key={expense.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
