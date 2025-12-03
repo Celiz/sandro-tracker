@@ -894,7 +894,7 @@ export default function RideShareTracker() {
       {/* FAB Menu */}
       {fabMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setFabMenuOpen(false)}>
-          <div className="absolute bottom-32 right-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute bottom-44 right-5 space-y-3" onClick={(e) => e.stopPropagation()}>
             <Button
               onClick={() => {
                 setFabMenuOpen(false)
@@ -966,7 +966,7 @@ export default function RideShareTracker() {
 
       {/* Sheet de agregar ganancia */}
       <Sheet open={earningSheetOpen} onOpenChange={setEarningSheetOpen}>
-        <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl">
+        <SheetContent side="bottom" className="rounded-t-3xl">
           <SheetHeader className="pb-4">
             <SheetTitle className="text-2xl">💰 Agregar Ganancia</SheetTitle>
             <SheetDescription className="text-base">Registra el viaje realizado</SheetDescription>
@@ -1036,7 +1036,7 @@ export default function RideShareTracker() {
 
       {/* Sheet de agregar gasto */}
       <Sheet open={expenseSheetOpen} onOpenChange={setExpenseSheetOpen}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
+        <SheetContent side="bottom" className="rounded-t-3xl">
           <SheetHeader className="pb-4">
             <SheetTitle className="text-2xl">💸 Agregar Gasto</SheetTitle>
             <SheetDescription className="text-base">Registra el gasto realizado</SheetDescription>

@@ -43,7 +43,7 @@ body {
   /* Botón FAB flotante */
   .fab-button {
     @apply fixed z-40 w-16 h-16 rounded-full shadow-xl flex items-center justify-center;
-    bottom: calc(80px + env(safe-area-inset-bottom));
+    bottom: calc(120px + env(safe-area-inset-bottom));
     right: 20px;
   }
   
