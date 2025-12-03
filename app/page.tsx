@@ -8,8 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import {
   Dialog,
   DialogContent,
@@ -19,7 +25,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  DollarSign,
   TrendingDown,
   TrendingUp,
   Plus,
@@ -28,8 +33,12 @@ import {
   Calendar,
   Target,
   PieChart,
-  User,
   Trash2,
+  Home,
+  Wallet,
+  Car,
+  Fuel,
+  X,
 } from "lucide-react"
 import {
   format,
@@ -59,23 +68,44 @@ import {
   Area,
   AreaChart,
 } from "recharts"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 const platforms = ["Uber", "Cabify", "Didi"]
-const conductors = ["Mamá (Claudia)", "Facundo"]
-const expenseCategories = ["Nafta","Lavar el auto", "Repuesto", "Other"]
+const CONDUCTOR_NAME = "Sandro"
+const expenseCategories = ["Nafta", "Lavar el auto", "Repuesto", "Other"]
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"]
 
+// Iconos para las plataformas
+const platformIcons: Record<string, string> = {
+  Uber: "🚗",
+  Cabify: "🚕",
+  Didi: "🚙",
+}
+
+// Iconos para categorías de gastos
+const categoryIcons: Record<string, React.ReactNode> = {
+  Nafta: <Fuel className="h-5 w-5" />,
+  "Lavar el auto": <Car className="h-5 w-5" />,
+  Repuesto: <Target className="h-5 w-5" />,
+  Other: <Wallet className="h-5 w-5" />,
+}
+
 export default function RideShareTracker() {
+  const isMobile = useIsMobile()
   const [earnings, setEarnings] = useState<Earning[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<"dashboard" | "gastos" | "estadisticas">("dashboard")
   const [selectedDate, setSelectedDate] = useState("all")
   const [selectedPlatform, setSelectedPlatform] = useState("all")
-  const [selectedConductor, setSelectedConductor] = useState("all")
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null)
   const [statsPeriod, setStatsPeriod] = useState<"day" | "week" | "month">("week")
-  const [statsSelectedConductor, setStatsSelectedConductor] = useState("all")
+
+  // Sheet states para formularios móvil
+  const [earningSheetOpen, setEarningSheetOpen] = useState(false)
+  const [expenseSheetOpen, setExpenseSheetOpen] = useState(false)
+  const [fabMenuOpen, setFabMenuOpen] = useState(false)
 
   // Dialog states for confirmation
   const [deleteDialog, setDeleteDialog] = useState({
@@ -88,7 +118,7 @@ export default function RideShareTracker() {
   const [earningForm, setEarningForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     platform: "",
-    conductor: "",
+    conductor: CONDUCTOR_NAME,
     amount: "",
     description: "",
   })
@@ -135,7 +165,7 @@ export default function RideShareTracker() {
 
     if (lastReset !== today) {
       localStorage.setItem("lastReset", today)
-      toast.success("¡Nuevo día! Listo para registrar nuevas ganancias y gastos")
+      toast.success("¡Nuevo día! Listo para registrar")
     }
   }
 
@@ -145,7 +175,7 @@ export default function RideShareTracker() {
   }, [])
 
   const addEarning = async () => {
-    if (earningForm.platform && earningForm.conductor && earningForm.amount) {
+    if (earningForm.platform && earningForm.amount) {
       try {
         const { data, error } = await supabase
           .from("earnings")
@@ -166,17 +196,18 @@ export default function RideShareTracker() {
         setEarningForm({
           date: format(new Date(), "yyyy-MM-dd"),
           platform: "",
-          conductor: "",
+          conductor: CONDUCTOR_NAME,
           amount: "",
           description: "",
         })
-        toast.success("Ganancia registrada correctamente")
+        setEarningSheetOpen(false)
+        toast.success("✅ Ganancia registrada")
       } catch (error) {
         console.error("Error adding earning:", error)
-        toast.error("Error al registrar la ganancia")
+        toast.error("Error al registrar")
       }
     } else {
-      toast.error("Por favor completa todos los campos obligatorios")
+      toast.error("Completa todos los campos")
     }
   }
 
@@ -204,13 +235,14 @@ export default function RideShareTracker() {
           amount: "",
           description: "",
         })
-        toast.success("Gasto registrado correctamente")
+        setExpenseSheetOpen(false)
+        toast.success("✅ Gasto registrado")
       } catch (error) {
         console.error("Error adding expense:", error)
-        toast.error("Error al registrar el gasto")
+        toast.error("Error al registrar")
       }
     } else {
-      toast.error("Por favor completa todos los campos obligatorios")
+      toast.error("Completa todos los campos")
     }
   }
 
@@ -218,15 +250,20 @@ export default function RideShareTracker() {
     setDeleteDialog({
       open: true,
       type: "expense",
-      item: { id: expenseId, amount: expenseAmount, category: expenseCategory }
+      item: { id: expenseId, amount: expenseAmount, category: expenseCategory },
     })
   }
 
-  const deleteEarning = async (earningId: string, earningAmount: number, earningPlatform: string, earningConductor: string) => {
+  const deleteEarning = async (
+    earningId: string,
+    earningAmount: number,
+    earningPlatform: string,
+    earningConductor: string
+  ) => {
     setDeleteDialog({
       open: true,
       type: "earning",
-      item: { id: earningId, amount: earningAmount, platform: earningPlatform, conductor: earningConductor }
+      item: { id: earningId, amount: earningAmount, platform: earningPlatform, conductor: earningConductor },
     })
   }
 
@@ -235,29 +272,23 @@ export default function RideShareTracker() {
 
     try {
       if (deleteDialog.type === "expense") {
-        const { error } = await supabase
-          .from("expenses")
-          .delete()
-          .eq("id", deleteDialog.item.id)
+        const { error } = await supabase.from("expenses").delete().eq("id", deleteDialog.item.id)
 
         if (error) throw error
 
-        setExpenses(expenses.filter(expense => expense.id !== deleteDialog.item.id))
-        toast.success("Gasto eliminado correctamente")
+        setExpenses(expenses.filter((expense) => expense.id !== deleteDialog.item.id))
+        toast.success("Gasto eliminado")
       } else if (deleteDialog.type === "earning") {
-        const { error } = await supabase
-          .from("earnings")
-          .delete()
-          .eq("id", deleteDialog.item.id)
+        const { error } = await supabase.from("earnings").delete().eq("id", deleteDialog.item.id)
 
         if (error) throw error
 
-        setEarnings(earnings.filter(earning => earning.id !== deleteDialog.item.id))
-        toast.success("Ganancia eliminada correctamente")
+        setEarnings(earnings.filter((earning) => earning.id !== deleteDialog.item.id))
+        toast.success("Ganancia eliminada")
       }
     } catch (error) {
       console.error("Error deleting item:", error)
-      toast.error(`Error al eliminar ${deleteDialog.type === "expense" ? "el gasto" : "la ganancia"}`)
+      toast.error("Error al eliminar")
     } finally {
       setDeleteDialog({ open: false, type: "" as any, item: null })
     }
@@ -267,12 +298,11 @@ export default function RideShareTracker() {
     setDeleteDialog({ open: false, type: "" as any, item: null })
   }
 
-  // Filter data based on selected date, platform, and conductor
+  // Filter data based on selected date and platform
   const filteredEarnings = earnings.filter((earning) => {
     const dateMatch = selectedDate === "all" || earning.date === selectedDate
     const platformMatch = selectedPlatform === "all" || earning.platform === selectedPlatform
-    const conductorMatch = selectedConductor === "all" || earning.conductor === selectedConductor
-    return dateMatch && platformMatch && conductorMatch
+    return dateMatch && platformMatch
   })
 
   const filteredExpenses = expenses.filter((expense) => {
@@ -286,13 +316,12 @@ export default function RideShareTracker() {
   const totalSpent = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)
   const netIncome = totalEarned - totalSpent
 
-  // Statistics calculations based on period - use ALL data, not filtered
+  // Statistics calculations based on period
   const getStatsData = () => {
     if (earnings.length === 0 && expenses.length === 0) {
       return []
     }
 
-    // Get all dates from earnings and expenses
     const allDates = [...earnings.map((e) => e.date), ...expenses.map((e) => e.date)]
       .map((dateStr) => new Date(dateStr))
       .sort((a, b) => a.getTime() - b.getTime())
@@ -352,24 +381,18 @@ export default function RideShareTracker() {
             periodEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59)
         }
 
-        // Filter earnings for this period using string comparison for dates
         const periodEarnings = earnings.filter((e) => {
           if (statsPeriod === "day") {
-            const earningDate = e.date
-            const periodDate = format(date, "yyyy-MM-dd")
-            return earningDate === periodDate
+            return e.date === format(date, "yyyy-MM-dd")
           } else {
             const eDate = new Date(e.date)
             return eDate >= periodStart && eDate <= periodEnd
           }
         })
 
-        // Filter expenses for this period using string comparison for dates
         const periodExpenses = expenses.filter((e) => {
           if (statsPeriod === "day") {
-            const expenseDate = e.date
-            const periodDate = format(date, "yyyy-MM-dd")
-            return expenseDate === periodDate
+            return e.date === format(date, "yyyy-MM-dd")
           } else {
             const eDate = new Date(e.date)
             return eDate >= periodStart && eDate <= periodEnd
@@ -405,7 +428,7 @@ export default function RideShareTracker() {
       .filter((item) => item.hasData || statsPeriod === "day")
   }
 
-  // Platform statistics - use ALL earnings, not filtered
+  // Platform statistics
   const platformStats = platforms
     .map((platform) => {
       const platformEarnings = earnings.filter((e) => e.platform === platform)
@@ -420,164 +443,21 @@ export default function RideShareTracker() {
     })
     .filter((stat) => stat.value > 0)
 
-  // Conductor statistics - use ALL earnings, not filtered
-  const conductorStats = conductors
-    .map((conductor) => {
-      const conductorEarnings = earnings.filter((e) => e.conductor === conductor)
-      const total = conductorEarnings.reduce((sum, e) => sum + e.amount, 0)
-      const trips = conductorEarnings.length
-      return {
-        name: conductor,
-        value: total,
-        trips,
-        average: trips > 0 ? total / trips : 0,
-      }
-    })
-    .filter((stat) => stat.value > 0)
-
-  // Expense category statistics - use ALL expenses, not filtered
+  // Expense category statistics
   const categoryStats = expenseCategories
     .map((category) => {
       const categoryExpenses = expenses.filter((e) => e.category === category)
       const total = categoryExpenses.reduce((sum, e) => sum + e.amount, 0)
-      const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+      const totalExpensesSum = expenses.reduce((sum, e) => sum + e.amount, 0)
       return {
         name: category,
         value: total,
-        percentage: totalExpenses > 0 ? (total / totalExpenses) * 100 : 0,
+        percentage: totalExpensesSum > 0 ? (total / totalExpensesSum) * 100 : 0,
       }
     })
     .filter((stat) => stat.value > 0)
 
   const chartData = getStatsData()
-
-  // Get conductor-specific data
-  const getConductorStatsData = () => {
-    if (earnings.length === 0 && expenses.length === 0) {
-      return []
-    }
-
-    // Filter by conductor if not "all"
-    const conductorEarnings =
-      statsSelectedConductor === "all" ? earnings : earnings.filter((e) => e.conductor === statsSelectedConductor)
-
-    // Get all dates from filtered earnings and all expenses
-    const allDates = [...conductorEarnings.map((e) => e.date), ...expenses.map((e) => e.date)]
-      .map((dateStr) => new Date(dateStr))
-      .sort((a, b) => a.getTime() - b.getTime())
-
-    if (allDates.length === 0) return []
-
-    const earliestDate = allDates[0]
-    const latestDate = allDates[allDates.length - 1]
-    const today = new Date()
-
-    let startDate: Date
-    let endDate: Date
-    let intervals: Date[]
-
-    switch (statsPeriod) {
-      case "day":
-        startDate = earliestDate
-        endDate = latestDate > today ? latestDate : today
-        intervals = eachDayOfInterval({ start: startDate, end: endDate })
-        break
-      case "week":
-        startDate = startOfWeek(earliestDate, { weekStartsOn: 1 })
-        endDate = endOfWeek(latestDate > today ? latestDate : today, { weekStartsOn: 1 })
-        intervals = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 })
-        break
-      case "month":
-        startDate = startOfMonth(earliestDate)
-        endDate = endOfMonth(latestDate > today ? latestDate : today)
-        intervals = eachMonthOfInterval({ start: startDate, end: endDate })
-        break
-      default:
-        startDate = earliestDate
-        endDate = latestDate > today ? latestDate : today
-        intervals = eachDayOfInterval({ start: startDate, end: endDate })
-    }
-
-    return intervals
-      .map((date) => {
-        let periodStart: Date
-        let periodEnd: Date
-
-        switch (statsPeriod) {
-          case "day":
-            periodStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-            periodEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59)
-            break
-          case "week":
-            periodStart = startOfWeek(date, { weekStartsOn: 1 })
-            periodEnd = endOfWeek(date, { weekStartsOn: 1 })
-            break
-          case "month":
-            periodStart = startOfMonth(date)
-            periodEnd = endOfMonth(date)
-            break
-          default:
-            periodStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-            periodEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59)
-        }
-
-        // Filter earnings for this period and conductor
-        const periodEarnings = conductorEarnings.filter((e) => {
-          if (statsPeriod === "day") {
-            const earningDate = e.date
-            const periodDate = format(date, "yyyy-MM-dd")
-            return earningDate === periodDate
-          } else {
-            const eDate = new Date(e.date)
-            return eDate >= periodStart && eDate <= periodEnd
-          }
-        })
-
-        // Filter expenses for this period (all expenses, not by conductor)
-        const periodExpenses = expenses.filter((e) => {
-          if (statsPeriod === "day") {
-            const expenseDate = e.date
-            const periodDate = format(date, "yyyy-MM-dd")
-            return expenseDate === periodDate
-          } else {
-            const eDate = new Date(e.date)
-            return eDate >= periodStart && eDate <= periodEnd
-          }
-        })
-
-        const totalEarnings = periodEarnings.reduce((sum, e) => sum + e.amount, 0)
-        const totalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0)
-        const trips = periodEarnings.length
-
-        let label: string
-        switch (statsPeriod) {
-          case "day":
-            label = format(date, "dd/MM", { locale: es })
-            break
-          case "week":
-            label = `S${format(date, "w", { locale: es })}`
-            break
-          case "month":
-            label = format(date, "MMM", { locale: es })
-            break
-          default:
-            label = format(date, "dd/MM", { locale: es })
-        }
-
-        return {
-          period: label,
-          ganancias: totalEarnings,
-          gastos: totalExpenses,
-          neto: totalEarnings - totalExpenses,
-          viajes: trips,
-          promedioPorViaje: trips > 0 ? totalEarnings / trips : 0,
-          hasData: totalEarnings > 0 || totalExpenses > 0,
-        }
-      })
-      .filter((item) => item.hasData || statsPeriod === "day")
-  }
-
-  const conductorChartData = getConductorStatsData()
 
   // Get available dates for the filter
   const getAvailableDates = () => {
@@ -592,1369 +472,689 @@ export default function RideShareTracker() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando datos...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600 mx-auto"></div>
+          <p className="mt-6 text-xl text-gray-600">Cargando...</p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard del Conductor</h1>
-          <p className="text-sm sm:text-base text-gray-600">Rastrea las ganancias y gastos de Mamá y Facundo</p>
+  // ============ COMPONENTES MÓVILES ============
+
+  // Tarjeta de resumen principal (Ganancia Neta como héroe)
+  const MobileSummaryCard = () => (
+    <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white shadow-xl">
+      <CardContent className="p-6">
+        <div className="text-center">
+          <p className="text-green-100 text-lg mb-2">Ganancia Neta</p>
+          <p className={`text-5xl font-bold mb-4 ${netIncome >= 0 ? "text-white" : "text-red-200"}`}>
+            ${netIncome.toFixed(0)}
+          </p>
+          <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-green-400">
+            <div>
+              <p className="text-green-100 text-sm">Ganado</p>
+              <p className="text-2xl font-semibold">+${totalEarned.toFixed(0)}</p>
+            </div>
+            <div>
+              <p className="text-green-100 text-sm">Gastado</p>
+              <p className="text-2xl font-semibold">-${totalSpent.toFixed(0)}</p>
+            </div>
+          </div>
         </div>
+      </CardContent>
+    </Card>
+  )
 
-        <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6">
-            <TabsTrigger value="dashboard" className="text-xs sm:text-sm">
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger value="gastos" className="text-xs sm:text-sm">
-              Gastos
-            </TabsTrigger>
-            <TabsTrigger value="statistics" className="text-xs sm:text-sm">
-              Estadísticas
-            </TabsTrigger>
-          </TabsList>
+  // Transacción como card móvil
+  const MobileTransactionCard = ({
+    type,
+    item,
+  }: {
+    type: "earning" | "expense"
+    item: Earning | Expense
+  }) => {
+    const isEarning = type === "earning"
+    const earning = item as Earning
+    const expense = item as Expense
 
-          <TabsContent value="dashboard" className="space-y-4 sm:space-y-6">
-            {/* Daily Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">Total Ganado</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-green-600">${totalEarned.toFixed(2)}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">Total Gastado</CardTitle>
-                  <TrendingDown className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-red-600">${totalSpent.toFixed(2)}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">Ganancia Neta</CardTitle>
-                  <DollarSign className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div
-                    className={`text-xl sm:text-2xl font-bold ${netIncome >= 0 ? "text-green-600" : "text-red-600"}`}
-                  >
-                    ${netIncome.toFixed(2)}
-                  </div>
-                </CardContent>
-              </Card>
+    return (
+      <div
+        className={`p-4 rounded-xl ${
+          isEarning ? "bg-green-50 border-2 border-green-200" : "bg-red-50 border-2 border-red-200"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              {isEarning ? (
+                <>
+                  <span className="text-2xl">{platformIcons[earning.platform]}</span>
+                  <Badge className="text-sm py-1 px-3">{earning.conductor.split(" ")[0]}</Badge>
+                </>
+              ) : (
+                <>
+                  <div className="p-2 bg-red-100 rounded-lg">{categoryIcons[expense.category]}</div>
+                  <span className="font-medium text-lg">{expense.category}</span>
+                </>
+              )}
             </div>
-
-            {/* Filters */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                  <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Filtros
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="date-filter" className="text-xs sm:text-sm">
-                      Fecha
-                    </Label>
-                    <Select value={selectedDate} onValueChange={setSelectedDate}>
-                      <SelectTrigger className="text-xs sm:text-sm">
-                        <SelectValue placeholder="Seleccionar fecha" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas las fechas</SelectItem>
-                        <SelectItem value={format(new Date(), "yyyy-MM-dd")}>Hoy</SelectItem>
-                        <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")}>Ayer</SelectItem>
-                        {availableDates.length > 0 && (
-                          <SelectItem value="separator" disabled>
-                            --- Fechas con datos ---
-                          </SelectItem>
-                        )}
-                        {availableDates.map((date) => (
-                          <SelectItem key={date} value={date}>
-                            {format(new Date(date), "dd/MM/yyyy", { locale: es })}
-                            {date === format(new Date(), "yyyy-MM-dd") ? " (Hoy)" : ""}
-                            {date === format(subDays(new Date(), 1), "yyyy-MM-dd") ? " (Ayer)" : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="platform-filter" className="text-xs sm:text-sm">
-                      Plataforma
-                    </Label>
-                    <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
-                      <SelectTrigger className="text-xs sm:text-sm">
-                        <SelectValue placeholder="Seleccionar plataforma" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas las plataformas</SelectItem>
-                        {platforms.map((platform) => (
-                          <SelectItem key={platform} value={platform}>
-                            {platform}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="conductor-filter" className="text-xs sm:text-sm">
-                      Conductor
-                    </Label>
-                    <Select value={selectedConductor} onValueChange={setSelectedConductor}>
-                      <SelectTrigger className="text-xs sm:text-sm">
-                        <SelectValue placeholder="Seleccionar conductor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los conductores</SelectItem>
-                        {conductors.map((conductor) => (
-                          <SelectItem key={conductor} value={conductor}>
-                            {conductor}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              {/* Add Earnings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Agregar Ganancias
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">Registra las ganancias de los viajes</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 sm:space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="earning-date" className="text-xs sm:text-sm">
-                        Fecha
-                      </Label>
-                      <Input
-                        id="earning-date"
-                        type="date"
-                        value={earningForm.date}
-                        onChange={(e) => setEarningForm({ ...earningForm, date: e.target.value })}
-                        className="text-xs sm:text-sm"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="earning-platform" className="text-xs sm:text-sm">
-                        Plataforma *
-                      </Label>
-                      <Select
-                        value={earningForm.platform}
-                        onValueChange={(value) => setEarningForm({ ...earningForm, platform: value })}
-                      >
-                        <SelectTrigger className="text-xs sm:text-sm">
-                          <SelectValue placeholder="Seleccionar plataforma" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {platforms.map((platform) => (
-                            <SelectItem key={platform} value={platform}>
-                              {platform}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="earning-conductor" className="text-xs sm:text-sm">
-                        Conductor *
-                      </Label>
-                      <Select
-                        value={earningForm.conductor}
-                        onValueChange={(value) => setEarningForm({ ...earningForm, conductor: value })}
-                      >
-                        <SelectTrigger className="text-xs sm:text-sm">
-                          <SelectValue placeholder="Seleccionar conductor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {conductors.map((conductor) => (
-                            <SelectItem key={conductor} value={conductor}>
-                              {conductor}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="earning-amount" className="text-xs sm:text-sm">
-                        Cantidad Ganada ($) *
-                      </Label>
-                      <Input
-                        id="earning-amount"
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={earningForm.amount}
-                        onChange={(e) => setEarningForm({ ...earningForm, amount: e.target.value })}
-                        className="text-xs sm:text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="earning-description" className="text-xs sm:text-sm">
-                      Descripción (Opcional)
-                    </Label>
-                    <Textarea
-                      id="earning-description"
-                      placeholder="ej. Zona aeropuerto, Viaje premium"
-                      value={earningForm.description}
-                      onChange={(e) => setEarningForm({ ...earningForm, description: e.target.value })}
-                      className="text-xs sm:text-sm min-h-[60px] sm:min-h-[80px]"
-                    />
-                  </div>
-
-                  <Button onClick={addEarning} className="w-full text-xs sm:text-sm">
-                    Agregar Ganancia
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Add Expenses */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Agregar Gastos
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">Registra los gastos de conducción</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 sm:space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="expense-date" className="text-xs sm:text-sm">
-                        Fecha
-                      </Label>
-                      <Input
-                        id="expense-date"
-                        type="date"
-                        value={expenseForm.date}
-                        onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
-                        className="text-xs sm:text-sm"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="expense-category" className="text-xs sm:text-sm">
-                        Categoría *
-                      </Label>
-                      <Select
-                        value={expenseForm.category}
-                        onValueChange={(value) => setExpenseForm({ ...expenseForm, category: value })}
-                      >
-                        <SelectTrigger className="text-xs sm:text-sm">
-                          <SelectValue placeholder="Seleccionar categoría" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {expenseCategories.map((category) => (
-                            <SelectItem key={category} value={category}>
-                              {category}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="expense-amount" className="text-xs sm:text-sm">
-                      Cantidad ($) *
-                    </Label>
-                    <Input
-                      id="expense-amount"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={expenseForm.amount}
-                      onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-                      className="text-xs sm:text-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="expense-description" className="text-xs sm:text-sm">
-                      Descripción (Opcional)
-                    </Label>
-                    <Textarea
-                      id="expense-description"
-                      placeholder="ej. Gasolinera, Peaje autopista"
-                      value={expenseForm.description}
-                      onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
-                      className="text-xs sm:text-sm min-h-[60px] sm:min-h-[80px]"
-                    />
-                  </div>
-
-                  <Button onClick={addExpense} className="w-full text-xs sm:text-sm">
-                    Agregar Gasto
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Recent Transactions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              {/* Recent Earnings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm sm:text-base">Ganancias Recientes</CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">{filteredEarnings.length} entradas</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[300px] sm:h-[400px]">
-                    <div className="space-y-3">
-                      {filteredEarnings.slice(0, 10).map((earning) => (
-                        <div key={earning.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="secondary" className="text-xs">
-                                {earning.platform}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {earning.conductor}
-                              </Badge>
-                              <span className="text-xs text-gray-600">{earning.date}</span>
-                            </div>
-                            {earning.description && (
-                              <p className="text-xs text-gray-600 mt-1 truncate">{earning.description}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 ml-2">
-                            <div className="text-sm sm:text-lg font-semibold text-green-600">
-                              +${earning.amount.toFixed(2)}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteEarning(earning.id, earning.amount, earning.platform, earning.conductor)}
-                              className="h-8 w-8 p-0 hover:bg-red-100 text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredEarnings.length === 0 && (
-                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
-                          No hay ganancias registradas
-                        </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
-              {/* Recent Expenses */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm sm:text-base">Gastos Recientes</CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">{filteredExpenses.length} entradas</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[300px] sm:h-[400px]">
-                    <div className="space-y-3">
-                      {filteredExpenses.map((expense) => (
-                        <div key={expense.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge variant="outline" className="text-xs">
-                                {expense.category}
-                              </Badge>
-                              <span className="text-xs text-gray-600">{expense.date}</span>
-                            </div>
-                            {expense.description && (
-                              <p className="text-xs text-gray-600 mt-1 truncate">{expense.description}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 ml-2">
-                            <div className="text-sm sm:text-lg font-semibold text-red-600">
-                              -${expense.amount.toFixed(2)}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteExpense(expense.id, expense.amount, expense.category)}
-                              className="h-8 w-8 p-0 hover:bg-red-100 text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredExpenses.length === 0 && (
-                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">No hay gastos registrados</p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="gastos" className="space-y-4 sm:space-y-6">
-            {/* Resumen de Gastos */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">Total Gastos</CardTitle>
-                  <TrendingDown className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-red-600">${totalSpent.toFixed(2)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {filteredExpenses.length} transacciones
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">Gasto Promedio</CardTitle>
-                  <DollarSign className="h-4 w-4 text-orange-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-orange-600">
-                    ${filteredExpenses.length > 0 ? (totalSpent / filteredExpenses.length).toFixed(2) : '0.00'}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Por transacción
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">Mayor Gasto</CardTitle>
-                  <Target className="h-4 w-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-bold text-purple-600">
-                    ${filteredExpenses.length > 0 ? Math.max(...filteredExpenses.map(e => e.amount)).toFixed(2) : '0.00'}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    En una sola transacción
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Filtros específicos para gastos */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                  <Filter className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Filtros de Gastos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="expense-date-filter" className="text-xs sm:text-sm">
-                      Fecha
-                    </Label>
-                    <Select value={selectedDate} onValueChange={setSelectedDate}>
-                      <SelectTrigger className="text-xs sm:text-sm">
-                        <SelectValue placeholder="Seleccionar fecha" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas las fechas</SelectItem>
-                        <SelectItem value={format(new Date(), "yyyy-MM-dd")}>Hoy</SelectItem>
-                        <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")}>Ayer</SelectItem>
-                        {availableDates.length > 0 && (
-                          <SelectItem value="separator" disabled>
-                            --- Fechas con datos ---
-                          </SelectItem>
-                        )}
-                        {availableDates.map((date) => (
-                          <SelectItem key={date} value={date}>
-                            {format(new Date(date), "dd/MM/yyyy", { locale: es })}
-                            {date === format(new Date(), "yyyy-MM-dd") ? " (Hoy)" : ""}
-                            {date === format(subDays(new Date(), 1), "yyyy-MM-dd") ? " (Ayer)" : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="expense-category-filter" className="text-xs sm:text-sm">
-                      Categoría
-                    </Label>
-                    <Select value={selectedExpenseCategory || "all"} onValueChange={(value) => setSelectedExpenseCategory(value === "all" ? null : value)}>
-                      <SelectTrigger className="text-xs sm:text-sm">
-                        <SelectValue placeholder="Seleccionar categoría" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas las categorías</SelectItem>
-                        {expenseCategories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              {/* Formulario de agregar gastos más prominente */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Agregar Nuevo Gasto
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">Registra un nuevo gasto de conducción</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 sm:space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="expense-date" className="text-xs sm:text-sm">
-                        Fecha
-                      </Label>
-                      <Input
-                        id="expense-date"
-                        type="date"
-                        value={expenseForm.date}
-                        onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
-                        className="text-xs sm:text-sm"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="expense-category" className="text-xs sm:text-sm">
-                        Categoría *
-                      </Label>
-                      <Select
-                        value={expenseForm.category}
-                        onValueChange={(value) => setExpenseForm({ ...expenseForm, category: value })}
-                      >
-                        <SelectTrigger className="text-xs sm:text-sm">
-                          <SelectValue placeholder="Seleccionar categoría" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {expenseCategories.map((category) => (
-                            <SelectItem key={category} value={category}>
-                              {category}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="expense-amount" className="text-xs sm:text-sm">
-                      Cantidad ($) *
-                    </Label>
-                    <Input
-                      id="expense-amount"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={expenseForm.amount}
-                      onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-                      className="text-xs sm:text-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="expense-description" className="text-xs sm:text-sm">
-                      Descripción (Opcional)
-                    </Label>
-                    <Textarea
-                      id="expense-description"
-                      placeholder="ej. Gasolinera Shell, Peaje autopista, Cambio de aceite"
-                      value={expenseForm.description}
-                      onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
-                      className="text-xs sm:text-sm min-h-[60px] sm:min-h-[80px]"
-                    />
-                  </div>
-
-                  <Button onClick={addExpense} className="w-full text-xs sm:text-sm" size="lg">
-                    Agregar Gasto
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Gráfico de gastos por categoría */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <PieChart className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Distribución por Categoría
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {categoryStats.length > 0 ? (
-                    <div className="h-[250px] sm:h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RechartsPieChart>
-                          <Pie
-                            data={categoryStats}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                            label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                          >
-                            {categoryStats.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{ fontSize: "12px" }}
-                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Total"]}
-                          />
-                        </RechartsPieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
-                      <p className="text-gray-500 text-sm">No hay gastos registrados</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Lista detallada de gastos */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm sm:text-base">Historial de Gastos</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">
-                  {filteredExpenses.length} gastos registrados
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[400px] sm:h-[500px]">
-                  <div className="space-y-3">
-                    {filteredExpenses.map((expense) => (
-                      <div key={expense.id} className="flex items-center justify-between p-4 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3 flex-wrap mb-2">
-                            <Badge variant="outline" className="text-xs font-medium">
-                              {expense.category}
-                            </Badge>
-                            <span className="text-sm text-gray-600">{format(new Date(expense.date), "dd/MM/yyyy", { locale: es })}</span>
-                          </div>
-                          {expense.description && (
-                            <p className="text-sm text-gray-700 mb-1">{expense.description}</p>
-                          )}
-                          <div className="text-xs text-gray-500">
-                            Registrado: {expense.created_at ? format(new Date(expense.created_at), "dd/MM/yyyy HH:mm", { locale: es }) : 'Fecha no disponible'}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 ml-4">
-                          <div className="text-right">
-                            <div className="text-lg font-bold text-red-600">
-                              -${expense.amount.toFixed(2)}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteExpense(expense.id, expense.amount, expense.category)}
-                            className="h-8 w-8 p-0 hover:bg-red-200 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    {filteredExpenses.length === 0 && (
-                      <div className="text-center py-8">
-                        <div className="text-gray-400 mb-4">
-                          <DollarSign className="h-12 w-12 mx-auto" />
-                        </div>
-                        <p className="text-gray-500 text-sm">No hay gastos registrados</p>
-                        <p className="text-gray-400 text-xs">Agrega tu primer gasto usando el formulario</p>
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            {/* Estadísticas adicionales */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              {/* Gastos por fecha */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Gastos por Período
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {chartData.length > 0 ? (
-                    <div className="h-[250px] sm:h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
-                          <YAxis fontSize={12} tick={{ fontSize: 10 }} />
-                          <Tooltip
-                            contentStyle={{ fontSize: "12px" }}
-                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Gastos"]}
-                          />
-                          <Bar dataKey="gastos" fill="#EF4444" name="Gastos" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
-                      <p className="text-gray-500 text-sm">No hay datos para mostrar</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Detalles por categoría */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm sm:text-base">Detalles por Categoría</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[250px] sm:h-[300px]">
-                    <div className="space-y-4">
-                      {categoryStats.map((stat, index) => (
-                        <div key={stat.name} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium text-xs sm:text-sm">{stat.name}</span>
-                            <div className="text-right">
-                              <div className="font-semibold text-xs sm:text-sm">${stat.value.toFixed(2)}</div>
-                              <div className="text-xs text-gray-600">{stat.percentage.toFixed(1)}% del total</div>
-                            </div>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-red-500 h-2 rounded-full transition-all duration-300" 
-                              style={{ width: `${stat.percentage}%` }}
-                            ></div>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {filteredExpenses.filter(e => e.category === stat.name).length} transacciones
-                          </div>
-                        </div>
-                      ))}
-                      {categoryStats.length === 0 && (
-                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
-                          No hay datos de gastos disponibles
-                        </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="statistics" className="space-y-4 sm:space-y-6">
-            {/* Period and Conductor Selector */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Configuración de Análisis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs sm:text-sm">Período de Análisis</Label>
-                    <Select value={statsPeriod} onValueChange={(value: "day" | "week" | "month") => setStatsPeriod(value)}>
-                      <SelectTrigger className="text-xs sm:text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="day">Por Día</SelectItem>
-                        <SelectItem value="week">Por Semana</SelectItem>
-                        <SelectItem value="month">Por Mes</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs sm:text-sm">Conductor para Análisis Detallado</Label>
-                    <Select value={statsSelectedConductor} onValueChange={setStatsSelectedConductor}>
-                      <SelectTrigger className="text-xs sm:text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los conductores</SelectItem>
-                        {conductors.map((conductor) => (
-                          <SelectItem key={conductor} value={conductor}>
-                            {conductor}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-              {/* Earnings vs Expenses Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Ganancias vs Gastos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {chartData.length > 0 ? (
-                    <div className="h-[250px] sm:h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
-                          <YAxis fontSize={12} tick={{ fontSize: 10 }} />
-                          <Tooltip
-                            contentStyle={{ fontSize: "12px" }}
-                            formatter={(value: number) => [`$${value.toFixed(2)}`, ""]}
-                          />
-                          <Bar dataKey="ganancias" fill="#10B981" name="Ganancias" />
-                          <Bar dataKey="gastos" fill="#EF4444" name="Gastos" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
-                      <p className="text-gray-500 text-sm">No hay datos para mostrar</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Net Income Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Ganancia Neta
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {chartData.length > 0 ? (
-                    <div className="h-[250px] sm:h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
-                          <YAxis fontSize={12} tick={{ fontSize: 10 }} />
-                          <Tooltip
-                            contentStyle={{ fontSize: "12px" }}
-                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Neto"]}
-                          />
-                          <Area type="monotone" dataKey="neto" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="h-[250px] sm:h-[300px] flex items-center justify-center">
-                      <p className="text-gray-500 text-sm">No hay datos para mostrar</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Conductor-Specific Analysis */}
-            {statsSelectedConductor !== "all" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <User className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Análisis Detallado: {statsSelectedConductor}
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    Estadísticas específicas del conductor seleccionado por {statsPeriod === "day" ? "día" : statsPeriod === "week" ? "semana" : "mes"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {conductorChartData.length > 0 ? (
-                    <div className="space-y-6">
-                      {/* Summary Cards for Selected Conductor */}
-                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4">
-                        <Card className="bg-green-50">
-                          <CardContent className="p-3 sm:p-4">
-                            <div className="text-center">
-                              <div className="text-lg sm:text-xl font-bold text-green-600">
-                                ${conductorChartData.reduce((sum, item) => sum + item.ganancias, 0).toFixed(2)}
-                              </div>
-                              <div className="text-xs sm:text-sm text-gray-600">Total Ganado</div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-blue-50">
-                          <CardContent className="p-3 sm:p-4">
-                            <div className="text-center">
-                              <div className="text-lg sm:text-xl font-bold text-blue-600">
-                                {conductorChartData.reduce((sum, item) => sum + item.viajes, 0)}
-                              </div>
-                              <div className="text-xs sm:text-sm text-gray-600">Total Viajes</div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-purple-50">
-                          <CardContent className="p-3 sm:p-4">
-                            <div className="text-center">
-                              <div className="text-lg sm:text-xl font-bold text-purple-600">
-                                ${(conductorChartData.reduce((sum, item) => sum + item.ganancias, 0) / Math.max(conductorChartData.reduce((sum, item) => sum + item.viajes, 0), 1)).toFixed(2)}
-                              </div>
-                              <div className="text-xs sm:text-sm text-gray-600">Promedio/Viaje</div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-orange-50">
-                          <CardContent className="p-3 sm:p-4">
-                            <div className="text-center">
-                              <div className="text-lg sm:text-xl font-bold text-orange-600">
-                                ${(conductorChartData.reduce((sum, item) => sum + item.neto, 0)).toFixed(2)}
-                              </div>
-                              <div className="text-xs sm:text-sm text-gray-600">Ganancia Neta</div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Conductor Performance Chart */}
-                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm sm:text-base">Ganancias por Período</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="h-[250px] sm:h-[300px]">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={conductorChartData}>
-                                  <CartesianGrid strokeDasharray="3 3" />
-                                  <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
-                                  <YAxis fontSize={12} tick={{ fontSize: 10 }} />
-                                  <Tooltip
-                                    contentStyle={{ fontSize: "12px" }}
-                                    formatter={(value: number) => [`$${value.toFixed(2)}`, ""]}
-                                  />
-                                  <Bar dataKey="ganancias" fill="#10B981" name="Ganancias" />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm sm:text-base">Viajes por Período</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="h-[250px] sm:h-[300px]">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={conductorChartData}>
-                                  <CartesianGrid strokeDasharray="3 3" />
-                                  <XAxis dataKey="period" fontSize={12} tick={{ fontSize: 10 }} />
-                                  <YAxis fontSize={12} tick={{ fontSize: 10 }} />
-                                  <Tooltip
-                                    contentStyle={{ fontSize: "12px" }}
-                                    formatter={(value: number) => [value, "Viajes"]}
-                                  />
-                                  <Bar dataKey="viajes" fill="#3B82F6" name="Viajes" />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Detailed Performance Table */}
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm sm:text-base">Detalle por Período</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <ScrollArea className="h-[300px]">
-                            <div className="space-y-2">
-                              {conductorChartData.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                  <div className="flex-1">
-                                    <div className="font-medium text-sm">{item.period}</div>
-                                    <div className="text-xs text-gray-600">{item.viajes} viajes</div>
-                                  </div>
-                                  <div className="text-right space-y-1">
-                                    <div className="font-semibold text-green-600">${item.ganancias.toFixed(2)}</div>
-                                    <div className="text-xs text-gray-600">
-                                      Prom: ${item.promedioPorViaje.toFixed(2)}/viaje
-                                    </div>
-                                    <div className={`text-xs font-medium ${item.neto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      Neto: ${item.neto.toFixed(2)}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500 text-sm">
-                        No hay datos disponibles para {statsSelectedConductor} en el período seleccionado
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Platform and Category Charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-              {/* Platform Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <PieChart className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Por Plataforma
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {platformStats.length > 0 ? (
-                    <div className="h-[250px] sm:h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RechartsPieChart>
-                          <Pie
-                            data={platformStats}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                            label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                          >
-                            {platformStats.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{ fontSize: "12px" }}
-                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Total"]}
-                          />
-                        </RechartsPieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <p className="text-center text-gray-500 py-8 text-xs sm:text-sm">
-                      No hay datos de plataformas disponibles
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Conductor Distribution */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <User className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Por Conductor
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {conductorStats.length > 0 ? (
-                    <div className="h-[250px] sm:h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RechartsPieChart>
-                          <Pie
-                            data={conductorStats}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                            label={({ name, percent }) => `${name.split(" ")[0]} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                          >
-                            {conductorStats.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{ fontSize: "12px" }}
-                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Total"]}
-                          />
-                        </RechartsPieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <p className="text-center text-gray-500 py-8 text-xs sm:text-sm">
-                      No hay datos de conductores disponibles
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Expense Categories */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                    <Target className="h-4 w-4 sm:h-5 sm:w-5" />
-                    Gastos por Categoría
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {categoryStats.length > 0 ? (
-                    <div className="h-[250px] sm:h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RechartsPieChart>
-                          <Pie
-                            data={categoryStats}
-                            cx="50%"
-                            cy="50%"
-                            outerRadius={80}
-                            fill="#8884d8"
-                            dataKey="value"
-                            label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                          >
-                            {categoryStats.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{ fontSize: "12px" }}
-                            formatter={(value: number) => [`$${value.toFixed(2)}`, "Total"]}
-                          />
-                        </RechartsPieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <p className="text-center text-gray-500 py-8 text-xs sm:text-sm">
-                      No hay datos de gastos disponibles
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Detailed Statistics */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-              {/* Platform Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm sm:text-base">Detalles por Plataforma</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[200px] sm:h-[250px]">
-                    <div className="space-y-3 sm:space-y-4">
-                      {platformStats.map((stat) => (
-                        <div key={stat.name} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium text-xs sm:text-sm">{stat.name}</span>
-                            <div className="text-right">
-                              <div className="font-semibold text-xs sm:text-sm">${stat.value.toFixed(2)}</div>
-                              <div className="text-xs text-gray-600">{stat.trips} viajes</div>
-                            </div>
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-600">
-                            <span>Promedio por viaje</span>
-                            <span>${stat.average.toFixed(2)}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full"
-                              style={{
-                                width: `${platformStats.length > 0 ? (stat.value / Math.max(...platformStats.map((s) => s.value))) * 100 : 0}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      ))}
-                      {platformStats.length === 0 && (
-                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
-                          No hay datos de plataformas disponibles
-                        </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
-              {/* Conductor Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm sm:text-base">Detalles por Conductor</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[200px] sm:h-[250px]">
-                    <div className="space-y-3 sm:space-y-4">
-                      {conductorStats.map((stat) => (
-                        <div key={stat.name} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium text-xs sm:text-sm">{stat.name}</span>
-                            <div className="text-right">
-                              <div className="font-semibold text-xs sm:text-sm">${stat.value.toFixed(2)}</div>
-                              <div className="text-xs text-gray-600">{stat.trips} viajes</div>
-                            </div>
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-600">
-                            <span>Promedio por viaje</span>
-                            <span>${stat.average.toFixed(2)}</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-green-600 h-2 rounded-full"
-                              style={{
-                                width: `${conductorStats.length > 0 ? (stat.value / Math.max(...conductorStats.map((s) => s.value))) * 100 : 0}%`,
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      ))}
-                      {conductorStats.length === 0 && (
-                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
-                          No hay datos de conductores disponibles
-                        </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-
-              {/* Category Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm sm:text-base">Detalles de Gastos</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[200px] sm:h-[250px]">
-                    <div className="space-y-3 sm:space-y-4">
-                      {categoryStats.map((stat) => (
-                        <div key={stat.name} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium text-xs sm:text-sm">{stat.name}</span>
-                            <div className="text-right">
-                              <div className="font-semibold text-xs sm:text-sm">${stat.value.toFixed(2)}</div>
-                              <div className="text-xs text-gray-600">{stat.percentage.toFixed(1)}%</div>
-                            </div>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="bg-red-500 h-2 rounded-full" style={{ width: `${stat.percentage}%` }}></div>
-                          </div>
-                        </div>
-                      ))}
-                      {categoryStats.length === 0 && (
-                        <p className="text-center text-gray-500 py-4 text-xs sm:text-sm">
-                          No hay datos de gastos disponibles
-                        </p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+            <p className="text-gray-600">{format(new Date(item.date), "dd MMM yyyy", { locale: es })}</p>
+            {item.description && <p className="text-gray-500 text-sm mt-1">{item.description}</p>}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`text-2xl font-bold ${isEarning ? "text-green-600" : "text-red-600"}`}>
+              {isEarning ? "+" : "-"}${item.amount.toFixed(0)}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                isEarning
+                  ? deleteEarning(earning.id, earning.amount, earning.platform, earning.conductor)
+                  : deleteExpense(expense.id, expense.amount, expense.category)
+              }
+              className="h-12 w-12 hover:bg-red-100 text-red-500"
+            >
+              <Trash2 className="h-6 w-6" />
+            </Button>
+          </div>
+        </div>
       </div>
+    )
+  }
+
+  // ============ CONTENIDO DE TABS ============
+
+  // Tab Dashboard
+  const DashboardContent = () => (
+    <div className="space-y-6">
+      <MobileSummaryCard />
+
+      {/* Filtros rápidos */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Filter className="h-5 w-5" />
+            Filtros
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-base">Fecha</Label>
+            <Select value={selectedDate} onValueChange={setSelectedDate}>
+              <SelectTrigger className="mobile-input">
+                <SelectValue placeholder="Seleccionar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-lg py-3">
+                  Todas
+                </SelectItem>
+                <SelectItem value={format(new Date(), "yyyy-MM-dd")} className="text-lg py-3">
+                  Hoy
+                </SelectItem>
+                <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")} className="text-lg py-3">
+                  Ayer
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-base">Plataforma</Label>
+            <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
+              <SelectTrigger className="mobile-input">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-lg py-3">
+                  Todas
+                </SelectItem>
+                {platforms.map((p) => (
+                  <SelectItem key={p} value={p} className="text-lg py-3">
+                    {platformIcons[p]} {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Transacciones recientes */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold">Últimas Transacciones</h2>
+        <div className="space-y-3">
+          {[...filteredEarnings.slice(0, 5), ...filteredExpenses.slice(0, 5)]
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 8)
+            .map((item) => {
+              const isEarning = "platform" in item
+              return (
+                <MobileTransactionCard
+                  key={item.id}
+                  type={isEarning ? "earning" : "expense"}
+                  item={item}
+                />
+              )
+            })}
+          {filteredEarnings.length === 0 && filteredExpenses.length === 0 && (
+            <Card className="p-8 text-center">
+              <p className="text-gray-500 text-lg">No hay transacciones</p>
+              <p className="text-gray-400">Usa el botón + para agregar</p>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  // Tab Gastos
+  const GastosContent = () => (
+    <div className="space-y-6">
+      {/* Resumen de gastos */}
+      <div className="grid grid-cols-1 gap-4">
+        <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
+          <CardContent className="p-6 text-center">
+            <p className="text-red-100 text-lg mb-2">Total Gastado</p>
+            <p className="text-4xl font-bold">${totalSpent.toFixed(0)}</p>
+            <p className="text-red-100 mt-2">{filteredExpenses.length} gastos</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filtro de categoría */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Filtrar por Categoría</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedExpenseCategory(null)}
+              className={`selection-chip ${
+                !selectedExpenseCategory ? "selection-chip-active bg-gray-800" : "selection-chip-inactive"
+              }`}
+            >
+              Todas
+            </button>
+            {expenseCategories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedExpenseCategory(cat)}
+                className={`selection-chip flex items-center gap-2 ${
+                  selectedExpenseCategory === cat ? "selection-chip-active bg-red-600 text-white" : "selection-chip-inactive"
+                }`}
+              >
+                {categoryIcons[cat]}
+                {cat}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Gráfico de distribución */}
+      {categoryStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <PieChart className="h-5 w-5" />
+              Distribución
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPieChart>
+                  <Pie
+                    data={categoryStats}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                  >
+                    {categoryStats.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => [`$${value.toFixed(0)}`, "Total"]} />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lista de gastos */}
+      <div className="space-y-3">
+        <h2 className="text-xl font-bold">Historial de Gastos</h2>
+        {filteredExpenses.map((expense) => (
+          <MobileTransactionCard key={expense.id} type="expense" item={expense} />
+        ))}
+        {filteredExpenses.length === 0 && (
+          <Card className="p-8 text-center">
+            <p className="text-gray-500 text-lg">No hay gastos</p>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+
+  // Tab Estadísticas
+  const EstadisticasContent = () => (
+    <div className="space-y-6">
+      {/* Selector de período */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Calendar className="h-5 w-5" />
+            Período de Análisis
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            {(["day", "week", "month"] as const).map((period) => (
+              <button
+                key={period}
+                onClick={() => setStatsPeriod(period)}
+                className={`flex-1 selection-chip ${
+                  statsPeriod === period ? "selection-chip-active bg-blue-600 text-white" : "selection-chip-inactive"
+                }`}
+              >
+                {period === "day" ? "Día" : period === "week" ? "Semana" : "Mes"}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Gráfico de ganancias vs gastos */}
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <BarChart3 className="h-5 w-5" />
+              Ganancias vs Gastos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="period" fontSize={14} />
+                  <YAxis fontSize={14} />
+                  <Tooltip formatter={(value: number) => [`$${value.toFixed(0)}`, ""]} />
+                  <Bar dataKey="ganancias" fill="#10B981" name="Ganancias" />
+                  <Bar dataKey="gastos" fill="#EF4444" name="Gastos" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Gráfico de ganancia neta */}
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <TrendingUp className="h-5 w-5" />
+              Ganancia Neta
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="period" fontSize={14} />
+                  <YAxis fontSize={14} />
+                  <Tooltip formatter={(value: number) => [`$${value.toFixed(0)}`, "Neto"]} />
+                  <Area type="monotone" dataKey="neto" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Distribución por plataforma */}
+      {platformStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <PieChart className="h-5 w-5" />
+              Por Plataforma
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPieChart>
+                  <Pie
+                    data={platformStats}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                  >
+                    {platformStats.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => [`$${value.toFixed(0)}`, "Total"]} />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Detalles por plataforma */}
+            <div className="space-y-3 mt-4">
+              {platformStats.map((stat) => (
+                <div key={stat.name} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{platformIcons[stat.name]}</span>
+                    <span className="font-medium text-lg">{stat.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-lg">${stat.value.toFixed(0)}</p>
+                    <p className="text-gray-500 text-sm">{stat.trips} viajes</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+
+  // ============ RENDER PRINCIPAL ============
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-40 px-4 py-4">
+        <h1 className="text-2xl font-bold text-center">
+          {activeTab === "dashboard" && "🚗 Mi Tracker"}
+          {activeTab === "gastos" && "💸 Gastos"}
+          {activeTab === "estadisticas" && "📊 Estadísticas"}
+        </h1>
+      </div>
+
+      {/* Contenido principal */}
+      <div className="max-w-2xl mx-auto p-4">
+        {activeTab === "dashboard" && <DashboardContent />}
+        {activeTab === "gastos" && <GastosContent />}
+        {activeTab === "estadisticas" && <EstadisticasContent />}
+      </div>
+
+      {/* FAB Menu */}
+      {fabMenuOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setFabMenuOpen(false)}>
+          <div className="absolute bottom-32 right-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <Button
+              onClick={() => {
+                setFabMenuOpen(false)
+                setEarningSheetOpen(true)
+              }}
+              className="w-full h-14 bg-green-600 hover:bg-green-700 text-lg rounded-full shadow-lg flex items-center gap-3 px-6"
+            >
+              <TrendingUp className="h-6 w-6" />
+              Agregar Ganancia
+            </Button>
+            <Button
+              onClick={() => {
+                setFabMenuOpen(false)
+                setExpenseSheetOpen(true)
+              }}
+              className="w-full h-14 bg-red-600 hover:bg-red-700 text-lg rounded-full shadow-lg flex items-center gap-3 px-6"
+            >
+              <TrendingDown className="h-6 w-6" />
+              Agregar Gasto
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Botón FAB */}
+      <button
+        onClick={() => setFabMenuOpen(!fabMenuOpen)}
+        className={`fab-button transition-all duration-300 ${
+          fabMenuOpen
+            ? "bg-gray-800 rotate-45"
+            : "bg-green-600 hover:bg-green-700"
+        } text-white`}
+      >
+        {fabMenuOpen ? <X className="h-8 w-8" /> : <Plus className="h-8 w-8" />}
+      </button>
+
+      {/* Navegación inferior */}
+      <nav className="bottom-nav">
+        <div className="grid grid-cols-3 max-w-lg mx-auto">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`flex flex-col items-center py-3 ${
+              activeTab === "dashboard" ? "text-green-600" : "text-gray-500"
+            }`}
+          >
+            <Home className="h-7 w-7" />
+            <span className="text-sm mt-1 font-medium">Inicio</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("gastos")}
+            className={`flex flex-col items-center py-3 ${
+              activeTab === "gastos" ? "text-red-600" : "text-gray-500"
+            }`}
+          >
+            <Wallet className="h-7 w-7" />
+            <span className="text-sm mt-1 font-medium">Gastos</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("estadisticas")}
+            className={`flex flex-col items-center py-3 ${
+              activeTab === "estadisticas" ? "text-blue-600" : "text-gray-500"
+            }`}
+          >
+            <BarChart3 className="h-7 w-7" />
+            <span className="text-sm mt-1 font-medium">Stats</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Sheet de agregar ganancia */}
+      <Sheet open={earningSheetOpen} onOpenChange={setEarningSheetOpen}>
+        <SheetContent side="bottom" className="h-[90vh] rounded-t-3xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="text-2xl">💰 Agregar Ganancia</SheetTitle>
+            <SheetDescription className="text-base">Registra el viaje realizado</SheetDescription>
+          </SheetHeader>
+          <ScrollArea className="h-[calc(90vh-180px)] pr-4">
+            <div className="space-y-6 pb-6">
+              <div className="space-y-3">
+                <Label className="mobile-label">Fecha</Label>
+                <Input
+                  type="date"
+                  value={earningForm.date}
+                  onChange={(e) => setEarningForm({ ...earningForm, date: e.target.value })}
+                  className="mobile-input"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label className="mobile-label">Plataforma *</Label>
+                <div className="flex flex-wrap gap-3">
+                  {platforms.map((platform) => (
+                    <button
+                      key={platform}
+                      type="button"
+                      onClick={() => setEarningForm({ ...earningForm, platform })}
+                      className={`selection-chip flex items-center gap-2 ${
+                        earningForm.platform === platform ? "selection-chip-active bg-green-600 text-white" : "selection-chip-inactive"
+                      }`}
+                    >
+                      <span className="text-xl">{platformIcons[platform]}</span>
+                      <span>{platform}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="mobile-label">Monto ($) *</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={earningForm.amount}
+                  onChange={(e) => setEarningForm({ ...earningForm, amount: e.target.value })}
+                  className="mobile-input text-2xl font-bold text-center"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label className="mobile-label">Descripción (opcional)</Label>
+                <Textarea
+                  placeholder="Ej: Viaje al aeropuerto"
+                  value={earningForm.description}
+                  onChange={(e) => setEarningForm({ ...earningForm, description: e.target.value })}
+                  className="mobile-input min-h-[80px]"
+                />
+              </div>
+            </div>
+          </ScrollArea>
+          <div className="pt-4 border-t">
+            <Button onClick={addEarning} className="w-full mobile-button bg-green-600 hover:bg-green-700">
+              <Plus className="h-6 w-6 mr-2" />
+              Guardar Ganancia
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet de agregar gasto */}
+      <Sheet open={expenseSheetOpen} onOpenChange={setExpenseSheetOpen}>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="text-2xl">💸 Agregar Gasto</SheetTitle>
+            <SheetDescription className="text-base">Registra el gasto realizado</SheetDescription>
+          </SheetHeader>
+          <ScrollArea className="h-[calc(85vh-180px)] pr-4">
+            <div className="space-y-6 pb-6">
+              <div className="space-y-3">
+                <Label className="mobile-label">Fecha</Label>
+                <Input
+                  type="date"
+                  value={expenseForm.date}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
+                  className="mobile-input"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label className="mobile-label">Categoría *</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  {expenseCategories.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => setExpenseForm({ ...expenseForm, category })}
+                      className={`selection-chip flex items-center justify-center gap-2 ${
+                        expenseForm.category === category ? "selection-chip-active bg-red-600 text-white" : "selection-chip-inactive"
+                      }`}
+                    >
+                      {categoryIcons[category]}
+                      <span>{category}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="mobile-label">Monto ($) *</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={expenseForm.amount}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                  className="mobile-input text-2xl font-bold text-center"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label className="mobile-label">Descripción (opcional)</Label>
+                <Textarea
+                  placeholder="Ej: Shell estación centro"
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                  className="mobile-input min-h-[80px]"
+                />
+              </div>
+            </div>
+          </ScrollArea>
+          <div className="pt-4 border-t">
+            <Button onClick={addExpense} className="w-full mobile-button bg-red-600 hover:bg-red-700">
+              <Plus className="h-6 w-6 mr-2" />
+              Guardar Gasto
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialog.open} onOpenChange={(open) => !open && cancelDelete()}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-w-[90vw] rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-red-600">
-              Confirmar Eliminación
-            </DialogTitle>
-            <DialogDescription className="text-gray-600">
-              ¿Estás seguro que deseas borrar {deleteDialog.type === "expense" ? "este gasto" : "esta ganancia"}?
+            <DialogTitle className="text-xl text-red-600">¿Eliminar?</DialogTitle>
+            <DialogDescription className="text-base">
+              Esta acción no se puede deshacer
             </DialogDescription>
           </DialogHeader>
-          
+
           {deleteDialog.item && (
             <div className="py-4">
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
                 {deleteDialog.type === "expense" ? (
                   <>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-sm">Categoría:</span>
-                      <span className="text-sm">{deleteDialog.item.category}</span>
+                    <div className="flex justify-between text-lg">
+                      <span>Categoría:</span>
+                      <span className="font-medium">{deleteDialog.item.category}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-sm">Monto:</span>
-                      <span className="text-sm font-semibold text-red-600">
-                        ${deleteDialog.item.amount.toFixed(2)}
-                      </span>
+                    <div className="flex justify-between text-lg">
+                      <span>Monto:</span>
+                      <span className="font-bold text-red-600">${deleteDialog.item.amount.toFixed(0)}</span>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-sm">Plataforma:</span>
-                      <span className="text-sm">{deleteDialog.item.platform}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-sm">Conductor:</span>
-                      <span className="text-sm">{deleteDialog.item.conductor}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-sm">Monto:</span>
-                      <span className="text-sm font-semibold text-green-600">
-                        ${deleteDialog.item.amount.toFixed(2)}
+                    <div className="flex justify-between text-lg">
+                      <span>Plataforma:</span>
+                      <span className="font-medium">
+                        {platformIcons[deleteDialog.item.platform]} {deleteDialog.item.platform}
                       </span>
+                    </div>
+                    <div className="flex justify-between text-lg">
+                      <span>Conductor:</span>
+                      <span className="font-medium">{deleteDialog.item.conductor}</span>
+                    </div>
+                    <div className="flex justify-between text-lg">
+                      <span>Monto:</span>
+                      <span className="font-bold text-green-600">${deleteDialog.item.amount.toFixed(0)}</span>
                     </div>
                   </>
                 )}
               </div>
-              <p className="text-sm text-gray-500 mt-3 text-center">
-                Esta acción no se puede deshacer.
-              </p>
             </div>
           )}
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={cancelDelete}
-              className="text-gray-600 hover:text-gray-700"
-            >
+          <DialogFooter className="flex-row gap-3">
+            <Button variant="outline" onClick={cancelDelete} className="flex-1 h-14 text-lg">
               Cancelar
             </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
-            >
+            <Button variant="destructive" onClick={confirmDelete} className="flex-1 h-14 text-lg">
               Eliminar
             </Button>
           </DialogFooter>

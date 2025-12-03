@@ -12,6 +12,55 @@ body {
   }
 }
 
+/* Mobile-first: Tamaños táctiles grandes para usuario 50+ */
+@layer components {
+  /* Inputs más grandes en móvil */
+  .mobile-input {
+    @apply min-h-[52px] text-lg px-4;
+  }
+  
+  /* Botones más grandes en móvil */
+  .mobile-button {
+    @apply min-h-[52px] text-lg font-semibold;
+  }
+  
+  /* Labels más legibles */
+  .mobile-label {
+    @apply text-base font-medium;
+  }
+  
+  /* Cards con más padding */
+  .mobile-card {
+    @apply p-5;
+  }
+  
+  /* Navegación inferior fija */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 z-50;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Botón FAB flotante */
+  .fab-button {
+    @apply fixed z-40 w-16 h-16 rounded-full shadow-xl flex items-center justify-center;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    right: 20px;
+  }
+  
+  /* Chips de selección táctil */
+  .selection-chip {
+    @apply min-h-[48px] px-6 rounded-full text-base font-medium transition-all;
+  }
+  
+  .selection-chip-active {
+    @apply bg-primary text-primary-foreground shadow-md;
+  }
+  
+  .selection-chip-inactive {
+    @apply bg-gray-100 text-gray-700 hover:bg-gray-200;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -90,5 +139,16 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Tipografía base más grande en móvil */
+  html {
+    font-size: 16px;
+  }
+  
+  @media (max-width: 640px) {
+    html {
+      font-size: 18px;
+    }
   }
 }
