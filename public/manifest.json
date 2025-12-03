@@ -1,6 +1,6 @@
 {
-  "name": "Tracker Conductor",
-  "short_name": "Tracker",
+  "name": "Control de Viajes",
+  "short_name": "Control de Viajes",
   "description": "Rastrea tus ganancias y gastos como conductor",
   "start_url": "/",
   "display": "standalone",

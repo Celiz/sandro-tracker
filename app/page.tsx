@@ -42,6 +42,7 @@ import {
 } from "lucide-react"
 import {
   format,
+  parseISO,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -96,7 +97,7 @@ export default function RideShareTracker() {
   const [earnings, setEarnings] = useState<Earning[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<"dashboard" | "gastos" | "estadisticas">("dashboard")
+  const [activeTab, setActiveTab] = useState<"dashboard" | "viajes" | "gastos" | "estadisticas">("dashboard")
   const [selectedDate, setSelectedDate] = useState("all")
   const [selectedPlatform, setSelectedPlatform] = useState("all")
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null)
@@ -323,7 +324,7 @@ export default function RideShareTracker() {
     }
 
     const allDates = [...earnings.map((e) => e.date), ...expenses.map((e) => e.date)]
-      .map((dateStr) => new Date(dateStr))
+      .map((dateStr) => parseISO(dateStr))
       .sort((a, b) => a.getTime() - b.getTime())
 
     if (allDates.length === 0) return []
@@ -385,7 +386,7 @@ export default function RideShareTracker() {
           if (statsPeriod === "day") {
             return e.date === format(date, "yyyy-MM-dd")
           } else {
-            const eDate = new Date(e.date)
+            const eDate = parseISO(e.date)
             return eDate >= periodStart && eDate <= periodEnd
           }
         })
@@ -394,7 +395,7 @@ export default function RideShareTracker() {
           if (statsPeriod === "day") {
             return e.date === format(date, "yyyy-MM-dd")
           } else {
-            const eDate = new Date(e.date)
+            const eDate = parseISO(e.date)
             return eDate >= periodStart && eDate <= periodEnd
           }
         })
@@ -462,7 +463,7 @@ export default function RideShareTracker() {
   // Get available dates for the filter
   const getAvailableDates = () => {
     const allDates = [...earnings.map((e) => e.date), ...expenses.map((e) => e.date)]
-    const uniqueDates = [...new Set(allDates)].sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+    const uniqueDates = [...new Set(allDates)].sort((a, b) => parseISO(b).getTime() - parseISO(a).getTime())
     return uniqueDates
   }
 
@@ -538,7 +539,7 @@ export default function RideShareTracker() {
                 </>
               )}
             </div>
-            <p className="text-gray-600">{format(new Date(item.date), "dd MMM yyyy", { locale: es })}</p>
+            <p className="text-gray-600">{format(parseISO(item.date), "dd MMM yyyy", { locale: es })}</p>
             {item.description && <p className="text-gray-500 text-sm mt-1">{item.description}</p>}
           </div>
           <div className="flex items-center gap-3">
@@ -567,65 +568,42 @@ export default function RideShareTracker() {
 
   // Tab Dashboard
   const DashboardContent = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <MobileSummaryCard />
 
-      {/* Filtros rápidos */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Filter className="h-5 w-5" />
-            Filtros
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-base">Fecha</Label>
-            <Select value={selectedDate} onValueChange={setSelectedDate}>
-              <SelectTrigger className="mobile-input">
-                <SelectValue placeholder="Seleccionar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-lg py-3">
-                  Todas
-                </SelectItem>
-                <SelectItem value={format(new Date(), "yyyy-MM-dd")} className="text-lg py-3">
-                  Hoy
-                </SelectItem>
-                <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")} className="text-lg py-3">
-                  Ayer
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-base">Plataforma</Label>
-            <Select value={selectedPlatform} onValueChange={setSelectedPlatform}>
-              <SelectTrigger className="mobile-input">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="text-lg py-3">
-                  Todas
-                </SelectItem>
-                {platforms.map((p) => (
-                  <SelectItem key={p} value={p} className="text-lg py-3">
-                    {platformIcons[p]} {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Accesos rápidos */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card 
+          className="cursor-pointer hover:shadow-md transition-shadow border-2 border-green-200"
+          onClick={() => setActiveTab("viajes")}
+        >
+          <CardContent className="p-4 text-center">
+            <Car className="h-8 w-8 mx-auto text-green-600 mb-2" />
+            <p className="font-semibold text-green-700">Ver Viajes</p>
+            <p className="text-sm text-gray-500">{earnings.length} registrados</p>
+          </CardContent>
+        </Card>
+        <Card 
+          className="cursor-pointer hover:shadow-md transition-shadow border-2 border-red-200"
+          onClick={() => setActiveTab("gastos")}
+        >
+          <CardContent className="p-4 text-center">
+            <Wallet className="h-8 w-8 mx-auto text-red-600 mb-2" />
+            <p className="font-semibold text-red-700">Ver Gastos</p>
+            <p className="text-sm text-gray-500">{expenses.length} registrados</p>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Transacciones recientes */}
+      {/* Transacciones recientes - Vista previa */}
       <div className="space-y-4">
-        <h2 className="text-xl font-bold">Últimas Transacciones</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-bold">Últimas Transacciones</h2>
+        </div>
         <div className="space-y-3">
-          {[...filteredEarnings.slice(0, 5), ...filteredExpenses.slice(0, 5)]
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .slice(0, 8)
+          {[...earnings.slice(0, 3), ...expenses.slice(0, 3)]
+            .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
+            .slice(0, 4)
             .map((item) => {
               const isEarning = "platform" in item
               return (
@@ -636,7 +614,7 @@ export default function RideShareTracker() {
                 />
               )
             })}
-          {filteredEarnings.length === 0 && filteredExpenses.length === 0 && (
+          {earnings.length === 0 && expenses.length === 0 && (
             <Card className="p-8 text-center">
               <p className="text-gray-500 text-lg">No hay transacciones</p>
               <p className="text-gray-400">Usa el botón + para agregar</p>
@@ -647,9 +625,119 @@ export default function RideShareTracker() {
     </div>
   )
 
+  // Tab Viajes (Ganancias)
+  const ViajesContent = () => (
+    <div className="space-y-6 pb-20">
+      {/* Resumen de ganancias */}
+      <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
+        <CardContent className="p-6 text-center">
+          <p className="text-green-100 text-lg mb-2">Total Ganado</p>
+          <p className="text-4xl font-bold">${totalEarned.toFixed(0)}</p>
+          <p className="text-green-100 mt-2">{filteredEarnings.length} viajes</p>
+        </CardContent>
+      </Card>
+
+      {/* Filtro por plataforma */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Filtrar por Plataforma</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedPlatform("all")}
+              className={`selection-chip ${selectedPlatform === "all" ? "selection-chip-active bg-gray-800" : "selection-chip-inactive"}`}
+            >
+              Todas
+            </button>
+            {platforms.map((platform) => (
+              <button
+                key={platform}
+                onClick={() => setSelectedPlatform(platform)}
+                className={`selection-chip flex items-center gap-2 ${selectedPlatform === platform ? "selection-chip-active bg-green-600 text-white" : "selection-chip-inactive"}`}
+              >
+                <span className="text-xl">{platformIcons[platform]}</span>
+                {platform}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filtro por fecha */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Calendar className="h-5 w-5" />
+            Filtrar por Fecha
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Select value={selectedDate} onValueChange={setSelectedDate}>
+            <SelectTrigger className="mobile-input">
+              <SelectValue placeholder="Seleccionar fecha" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-lg py-3">Todas las fechas</SelectItem>
+              <SelectItem value={format(new Date(), "yyyy-MM-dd")} className="text-lg py-3">Hoy</SelectItem>
+              <SelectItem value={format(subDays(new Date(), 1), "yyyy-MM-dd")} className="text-lg py-3">Ayer</SelectItem>
+              {availableDates.slice(0, 10).map((date) => (
+                <SelectItem key={date} value={date} className="text-lg py-3">
+                  {format(parseISO(date), "dd MMM yyyy", { locale: es })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {/* Distribución por plataforma */}
+      {platformStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <PieChart className="h-5 w-5" />
+              Por Plataforma
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {platformStats.map((stat) => (
+                <div key={stat.name} className="flex justify-between items-center p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{platformIcons[stat.name]}</span>
+                    <div>
+                      <span className="font-medium text-lg">{stat.name}</span>
+                      <p className="text-gray-500 text-sm">{stat.trips} viajes • Prom: ${stat.average.toFixed(0)}</p>
+                    </div>
+                  </div>
+                  <p className="font-bold text-xl text-green-600">${stat.value.toFixed(0)}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lista de viajes */}
+      <div className="space-y-3">
+        <h2 className="text-xl font-bold">Historial de Viajes</h2>
+        {filteredEarnings.map((earning) => (
+          <MobileTransactionCard key={earning.id} type="earning" item={earning} />
+        ))}
+        {filteredEarnings.length === 0 && (
+          <Card className="p-8 text-center">
+            <p className="text-gray-500 text-lg">No hay viajes registrados</p>
+            <p className="text-gray-400">Usa el botón + para agregar</p>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+
   // Tab Gastos
   const GastosContent = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Resumen de gastos */}
       <div className="grid grid-cols-1 gap-4">
         <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
@@ -743,7 +831,7 @@ export default function RideShareTracker() {
 
   // Tab Estadísticas
   const EstadisticasContent = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Selector de período */}
       <Card>
         <CardHeader className="pb-3">
@@ -879,6 +967,7 @@ export default function RideShareTracker() {
       <div className="bg-white border-b sticky top-0 z-40 px-4 py-4">
         <h1 className="text-2xl font-bold text-center">
           {activeTab === "dashboard" && "🚗 Mi Tracker"}
+          {activeTab === "viajes" && "🚕 Mis Viajes"}
           {activeTab === "gastos" && "💸 Gastos"}
           {activeTab === "estadisticas" && "📊 Estadísticas"}
         </h1>
@@ -887,6 +976,7 @@ export default function RideShareTracker() {
       {/* Contenido principal */}
       <div className="max-w-2xl mx-auto p-4">
         {activeTab === "dashboard" && <DashboardContent />}
+        {activeTab === "viajes" && <ViajesContent />}
         {activeTab === "gastos" && <GastosContent />}
         {activeTab === "estadisticas" && <EstadisticasContent />}
       </div>
@@ -933,15 +1023,24 @@ export default function RideShareTracker() {
 
       {/* Navegación inferior */}
       <nav className="bottom-nav">
-        <div className="grid grid-cols-3 max-w-lg mx-auto">
+        <div className="grid grid-cols-4 max-w-lg mx-auto">
           <button
             onClick={() => setActiveTab("dashboard")}
             className={`flex flex-col items-center py-3 ${
               activeTab === "dashboard" ? "text-green-600" : "text-gray-500"
             }`}
           >
-            <Home className="h-7 w-7" />
-            <span className="text-sm mt-1 font-medium">Inicio</span>
+            <Home className="h-6 w-6" />
+            <span className="text-xs mt-1 font-medium">Inicio</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("viajes")}
+            className={`flex flex-col items-center py-3 ${
+              activeTab === "viajes" ? "text-green-600" : "text-gray-500"
+            }`}
+          >
+            <Car className="h-6 w-6" />
+            <span className="text-xs mt-1 font-medium">Viajes</span>
           </button>
           <button
             onClick={() => setActiveTab("gastos")}
@@ -949,8 +1048,8 @@ export default function RideShareTracker() {
               activeTab === "gastos" ? "text-red-600" : "text-gray-500"
             }`}
           >
-            <Wallet className="h-7 w-7" />
-            <span className="text-sm mt-1 font-medium">Gastos</span>
+            <Wallet className="h-6 w-6" />
+            <span className="text-xs mt-1 font-medium">Gastos</span>
           </button>
           <button
             onClick={() => setActiveTab("estadisticas")}
@@ -958,8 +1057,8 @@ export default function RideShareTracker() {
               activeTab === "estadisticas" ? "text-blue-600" : "text-gray-500"
             }`}
           >
-            <BarChart3 className="h-7 w-7" />
-            <span className="text-sm mt-1 font-medium">Stats</span>
+            <BarChart3 className="h-6 w-6" />
+            <span className="text-xs mt-1 font-medium">Stats</span>
           </button>
         </div>
       </nav>
